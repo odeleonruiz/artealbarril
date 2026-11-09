@@ -30,7 +30,7 @@
 <label for="email">Correo electrónico de pruebas</label><input type="email" id="email" autocomplete="username" required>
 <label for="password">Contraseña nueva de pruebas</label><input type="password" id="password" autocomplete="new-password" minlength="8" required>
 <div>
-<button id="registrar">Crear cuenta de prueba</button><button id="entrar">Iniciar sesión</button><button id="verificar" class="secondary">Verificar acceso</button><button id="salir" class="secondary">Cerrar sesión</button>
+<button id="registrar">Crear cuenta de prueba</button><button id="entrar">Iniciar sesión</button><button id="verificar" class="secondary">Verificar acceso</button><button id="salir" class="secondary">Cerrar sesión</button><button id="solicitarVendedor" class="secondary">Solicitar acceso vendedor QA</button>
 </div>
 <div id="status" role="status" aria-live="polite">Sin sesión.</div>
 <pre id="result">La pantalla no muestra contraseñas ni tokens.</pre>
@@ -47,6 +47,7 @@
 <button type="button" data-tab="facturas" aria-pressed="false">Facturas</button>
 <button type="button" data-tab="venta_qa" aria-pressed="false">Registrar venta QA</button>
 <button type="button" data-tab="compra_qa" aria-pressed="false">Registrar compra QA</button>
+<button type="button" data-tab="vendedor_solicitudes" aria-pressed="false">Solicitudes vendedor QA</button>
 <button type="button" data-tab="seguridad_qa" aria-pressed="false">Seguridad y permisos QA</button>
 <button type="button" data-tab="caja_qa" aria-pressed="false">Conciliar Caja QA</button>
 <button type="button" data-tab="fifo_audit" aria-pressed="false">Auditoría FIFO</button>
@@ -54,6 +55,15 @@
 <button type="button" data-tab="credito_qa" aria-pressed="false">Abonar crédito QA</button>
 </div>
 <div class="table-wrap" id="tableArea"></div>
+
+
+<section id="vendedorQAForm" class="qa-form" hidden>
+<h3>Vendedor QA — Solicitudes de acceso</h3>
+<p class="hint">Solo el jefe puede aprobar una segunda cuenta Auth confirmada. La aprobación asigna exclusivamente el perfil ficticio «vendedor QA». Nunca permite cambiar el rol de jefe ni los datos de producción.</p>
+<button type="button" id="qa_vendedor_actualizar" class="secondary">Consultar solicitudes pendientes</button>
+<div id="qa_vendedor_pendientes" role="status" aria-live="polite"></div>
+<p id="qa_vendedor_resultado" role="status" aria-live="polite"></p>
+</section>
 
 <section id="cajaQAForm" class="qa-form" hidden>
 <h3>Conciliación de Caja — Staging</h3>
@@ -180,7 +190,7 @@ async function prepareSale(){
  if(!pr.length||!clients.data.length)throw new Error('No hay clientes o productos ficticios disponibles');
 }
 function esc(v){return String(v??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-async function renderTab(tab){activeTab=tab;$('cajaQAForm').hidden=tab!=='caja_qa';$('pagoProveedorForm').hidden=tab!=='proveedores_qa';$('compraForm').hidden=tab!=='compra_qa';$('ventaForm').hidden=tab!=='venta_qa';$('creditoForm').hidden=tab!=='credito_qa';document.querySelectorAll('[data-tab]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tab===tab)));if(tab==='venta_qa'){await prepareSale();return;}if(tab==='credito_qa'){await prepareCredit();return;}if(tab==='compra_qa'){await preparePurchase();return;}if(tab==='proveedores_qa'){await prepareSupplierPayment();return;}if(tab==='fifo_audit'){await showFifoAudit();return;}if(tab==='caja_qa'){await prepareCajaQA();return;}if(tab==='seguridad_qa'){await showSecurityAudit();return;}const m=models[tab];$('tableArea').textContent='Consultando datos de prueba…';const res=await client.from(m.table).select(m.cols).limit(15).order('id',{ascending:false});if(res.error){$('tableArea').textContent='No tienes permiso para consultar este módulo o ocurrió un error: '+res.error.message;return}if(!(res.data||[]).length){$('tableArea').textContent='Sin registros visibles para este usuario.';return}let keys=m.cols.split(',');$('tableArea').innerHTML='<table class="result-table"><thead><tr>'+m.headings.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+res.data.map(v=>'<tr>'+keys.map(k=>'<td>'+esc(v[k])+'</td>').join('')+'</tr>').join('')+'</tbody></table>'}
+async function renderTab(tab){activeTab=tab;$('vendedorQAForm').hidden=tab!=='vendedor_solicitudes';$('cajaQAForm').hidden=tab!=='caja_qa';$('pagoProveedorForm').hidden=tab!=='proveedores_qa';$('compraForm').hidden=tab!=='compra_qa';$('ventaForm').hidden=tab!=='venta_qa';$('creditoForm').hidden=tab!=='credito_qa';document.querySelectorAll('[data-tab]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tab===tab)));if(tab==='venta_qa'){await prepareSale();return;}if(tab==='credito_qa'){await prepareCredit();return;}if(tab==='compra_qa'){await preparePurchase();return;}if(tab==='proveedores_qa'){await prepareSupplierPayment();return;}if(tab==='fifo_audit'){await showFifoAudit();return;}if(tab==='caja_qa'){await prepareCajaQA();return;}if(tab==='seguridad_qa'){await showSecurityAudit();return;}if(tab==='vendedor_solicitudes'){await prepareVendorRequests();return;}const m=models[tab];$('tableArea').textContent='Consultando datos de prueba…';const res=await client.from(m.table).select(m.cols).limit(15).order('id',{ascending:false});if(res.error){$('tableArea').textContent='No tienes permiso para consultar este módulo o ocurrió un error: '+res.error.message;return}if(!(res.data||[]).length){$('tableArea').textContent='Sin registros visibles para este usuario.';return}let keys=m.cols.split(',');$('tableArea').innerHTML='<table class="result-table"><thead><tr>'+m.headings.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+res.data.map(v=>'<tr>'+keys.map(k=>'<td>'+esc(v[k])+'</td>').join('')+'</tr>').join('')+'</tbody></table>'}
 async function openDashboard(profile,permissions){loadedProfile=profile;$('dashboard').hidden=false;$('rolText').textContent='Rol: '+(profile?.rol||'sin rol');$('stats').innerHTML=permissions.map(p=>'<div class="stat"><b>'+esc(p.error?'—':p.visibles??0)+'</b><span>'+esc(p.modulo)+'</span></div>').join('');await renderTab('productos')}
 function fmtQ(n){return 'Q'+Number(n).toFixed(2)}
 function creditBalance(c){return Math.max(0,Math.round((Number(c.monto)-Number(c.pagado||0))*100)/100)}
@@ -530,6 +540,46 @@ async function showSecurityAudit(){
  +(role==='jefe'?'<p class="warning"><strong>Pendiente:</strong> prueba de acceso con cuenta real de vendedor QA. Las simulaciones de permisos no demuestran por sí solas que todos los flujos de vendedor sean seguros.</p>':'<p class="small">Las restricciones se aplican en Supabase, además de en esta pantalla.</p>')
  +'<p class="small">Staging: 68 tablas con RLS activo, comprobado en auditoría del servidor. Los permisos de cobro de créditos ahora validan el acceso al cliente. Caja global está limitada al jefe mientras se implementan turnos individuales.</p>';
 }
+
+
+async function prepareVendorRequests(){
+ $('vendedorQAForm').hidden=false;$('tableArea').textContent='Aprobación de cuentas de vendedor de Staging.';
+ if(loadedProfile?.rol!=='jefe')throw new Error('Solo el jefe puede aprobar vendedores.');
+ const r=await client.rpc('aq_solicitudes_vendedor_pendientes_qa_v1');
+ if(r.error)throw r.error;
+ const solicitudes=Array.isArray(r.data)?r.data:[];
+ const target=$('qa_vendedor_pendientes');target.replaceChildren();
+ if(!solicitudes.length){target.textContent='No hay solicitudes pendientes. Registra una segunda cuenta de prueba en una ventana de incógnito y presiona «Solicitar acceso vendedor QA».';return;}
+ const table=document.createElement('table');table.className='result-table';
+ const head=document.createElement('thead');const hr=document.createElement('tr');
+ ['Solicitud','Fecha','Acción'].forEach(s=>{const th=document.createElement('th');th.textContent=s;hr.append(th)});head.append(hr);table.append(head);
+ const body=document.createElement('tbody');
+ for(const item of solicitudes){
+  const tr=document.createElement('tr');const id=document.createElement('td');id.textContent='#'+item.id;
+  const date=document.createElement('td');date.textContent=new Date(item.solicitado_en).toLocaleString('es-GT');
+  const control=document.createElement('td');const btn=document.createElement('button');btn.type='button';btn.textContent='Aprobar vendedor QA';
+  btn.onclick=async()=>{
+   if(!confirm('¿Aprobar solicitud #'+item.id+' como vendedor ficticio de Staging?'))return;
+   btn.disabled=true;$('qa_vendedor_resultado').textContent='Aprobando solicitud…';
+   try{
+    const a=await client.rpc('aq_aprobar_vendedor_qa_v1',{p_solicitud_id:Number(item.id)});
+    if(a.error)throw a.error;
+    $('qa_vendedor_resultado').className='ok';$('qa_vendedor_resultado').textContent='✓ Solicitud #'+item.id+' aprobada. El vendedor puede presionar «Verificar acceso» en su otra ventana.';
+    await prepareVendorRequests();
+   }catch(err){$('qa_vendedor_resultado').className='error';$('qa_vendedor_resultado').textContent='No se aprobó: '+err.message}
+   finally{btn.disabled=false}
+  };
+  control.append(btn);tr.append(id,date,control);body.append(tr);
+ }
+ table.append(body);target.append(table);
+}
+$('qa_vendedor_actualizar').addEventListener('click',()=>prepareVendorRequests().catch(e=>$('qa_vendedor_resultado').textContent=e.message));
+$('solicitarVendedor').onclick=()=>run(async()=>{
+ const ident=await readIdentity();
+ const r=await client.rpc('aq_solicitar_vendedor_qa_v1');
+ if(r.error)throw r.error;
+ show('Solicitud para vendedor QA creada. En la sesión de jefe abre «Solicitudes vendedor QA» y apruébala.',{solicitud:r.data,identidad:{id:ident.id}});
+});
 
 document.querySelectorAll('[data-tab]').forEach(button=>button.addEventListener('click',()=>{if(!loadedProfile)return;renderTab(button.dataset.tab).catch(e=>$('tableArea').textContent=e.message)}));
 $('registrar').onclick=()=>run(async()=>{const email=$('email').value.trim(),password=$('password').value;if(!email||password.length<8)throw new Error('Introduce correo y contraseña de 8 caracteres o más.');let r=await client.auth.signUp({email,password});$('password').value='';if(r.error)throw r.error;show('Solicitud registrada. Revisa tu correo por si debes confirmar la cuenta. Una cuenta nueva NO recibe permisos automáticamente.',{correo:email,uid:r.data.user?.id||null,sesion_activa:!!r.data.session})});
