@@ -2,6 +2,7 @@
 -- Ejecución exclusivamente contra aquabri-staging.
 -- Nunca modifica de forma permanente roles, ventas, créditos, caja ni usuarios.
 BEGIN;
+SELECT set_config('qa.boss',(SELECT id::text FROM public.usuarios WHERE rol='jefe' LIMIT 1),true);
 SELECT set_config('qa.vendor',(SELECT id::text FROM public.usuarios WHERE rol='vendedor' LIMIT 1),true);
 SELECT set_config('qa.boss_auth',(SELECT auth_uid::text FROM public.usuarios WHERE rol='jefe' LIMIT 1),true);
 SELECT set_config('qa.vendor_auth',(SELECT auth_uid::text FROM public.usuarios WHERE rol='vendedor' LIMIT 1),true);
@@ -59,11 +60,9 @@ BEGIN
   IF NOT rechaza THEN RAISE EXCEPTION 'Escalamiento de privilegios'; END IF;
   rechaza:=false;
   BEGIN PERFORM public.aq_asignar_permiso_auth_v1(
-      (SELECT (j->>'id')::integer FROM jsonb_array_elements(
-          jsonb_build_array(jsonb_build_object('id',current_setting('qa.vendor')::int))) j LIMIT 1),
-      'seguridad.permisos',true,'QA');
+      current_setting('qa.boss')::int,'ventas',false,'QA');
   EXCEPTION WHEN SQLSTATE '42501' THEN rechaza:=true; END;
-  IF NOT rechaza THEN RAISE EXCEPTION 'Permiso de seguridad administrable'; END IF;
+  IF NOT rechaza THEN RAISE EXCEPTION 'Permisos del jefe modificables'; END IF;
 END
 $qa$;
 ROLLBACK;
