@@ -47,11 +47,38 @@
 <button type="button" data-tab="facturas" aria-pressed="false">Facturas</button>
 <button type="button" data-tab="venta_qa" aria-pressed="false">Registrar venta QA</button>
 <button type="button" data-tab="compra_qa" aria-pressed="false">Registrar compra QA</button>
+<button type="button" data-tab="caja_qa" aria-pressed="false">Conciliar Caja QA</button>
 <button type="button" data-tab="fifo_audit" aria-pressed="false">Auditoría FIFO</button>
 <button type="button" data-tab="proveedores_qa" aria-pressed="false">Pagar proveedor QA</button>
 <button type="button" data-tab="credito_qa" aria-pressed="false">Abonar crédito QA</button>
 </div>
 <div class="table-wrap" id="tableArea"></div>
+
+<section id="cajaQAForm" class="qa-form" hidden>
+<h3>Conciliación de Caja — Staging</h3>
+<p class="hint">Solo jefe. Separa una apertura, el conteo físico y el cierre. Los movimientos realizados antes de una nueva apertura no entran en su cálculo. No utilizar para Caja real.</p>
+<label for="qa_caja_fecha">Fecha de Caja</label><input id="qa_caja_fecha" type="date" required>
+<button type="button" id="qa_caja_actualizar" class="secondary">Consultar estado de Caja</button>
+<div id="qa_caja_info" role="status" aria-live="polite" style="margin-top:14px"></div>
+<form id="qa_abrir_caja_form" hidden>
+<h4>Abrir Caja ficticia</h4>
+<label for="qa_fondo_apertura">Fondo inicial Q</label><input type="number" id="qa_fondo_apertura" min="0" max="1000000" step="0.01" value="5.00" required>
+<button id="qa_abrir_caja_boton" type="submit">Registrar apertura QA</button>
+<p id="qa_apertura_result" role="status" aria-live="polite"></p>
+</form>
+<form id="qa_cerrar_caja_form" hidden>
+<h4>Cerrar Caja ficticia</h4>
+<p class="hint">El sistema verifica el saldo y la cantidad de movimientos otra vez al guardar. Si alguien registra operaciones entre la consulta y el cierre, se rechazará y deberás actualizar.</p>
+<label for="qa_caja_contado">Efectivo contado Q</label><input type="number" id="qa_caja_contado" min="0" step="0.01" required>
+<p id="qa_caja_diferencia" class="balance" aria-live="polite">Diferencia: —</p>
+<label><input id="qa_caja_acepta_sin_medio" type="checkbox" style="width:auto;margin-right:8px">Acepto contar como efectivo los movimientos que no identifican el medio de pago</label>
+<label><input id="qa_caja_acepta_diferencia" type="checkbox" style="width:auto;margin-right:8px">Confirmo la diferencia entre efectivo esperado y contado</label>
+<label for="qa_caja_notas">Observaciones</label><textarea id="qa_caja_notas" maxlength="300" placeholder="Cierre de prueba"></textarea>
+<button id="qa_cerrar_caja_boton" type="submit">Confirmar cierre de Caja QA</button>
+<p id="qa_cierre_result" role="status" aria-live="polite"></p>
+</form>
+</section>
+
 <form id="ventaForm" class="qa-form" hidden>
 <h3>Venta ficticia de prueba</h3><p>Solo Staging. Esta operación SÍ escribe en la base de pruebas: crea venta y modifica inventario y Caja o créditos ficticios.</p>
 <label for="qa_cliente">Cliente ficticio</label><select id="qa_cliente" required></select>
@@ -152,7 +179,7 @@ async function prepareSale(){
  if(!pr.length||!clients.data.length)throw new Error('No hay clientes o productos ficticios disponibles');
 }
 function esc(v){return String(v??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-async function renderTab(tab){activeTab=tab;$('pagoProveedorForm').hidden=tab!=='proveedores_qa';$('compraForm').hidden=tab!=='compra_qa';$('ventaForm').hidden=tab!=='venta_qa';$('creditoForm').hidden=tab!=='credito_qa';document.querySelectorAll('[data-tab]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tab===tab)));if(tab==='venta_qa'){await prepareSale();return;}if(tab==='credito_qa'){await prepareCredit();return;}if(tab==='compra_qa'){await preparePurchase();return;}if(tab==='proveedores_qa'){await prepareSupplierPayment();return;}if(tab==='fifo_audit'){await showFifoAudit();return;}const m=models[tab];$('tableArea').textContent='Consultando datos de prueba…';const res=await client.from(m.table).select(m.cols).limit(15).order('id',{ascending:false});if(res.error){$('tableArea').textContent='No tienes permiso para consultar este módulo o ocurrió un error: '+res.error.message;return}if(!(res.data||[]).length){$('tableArea').textContent='Sin registros visibles para este usuario.';return}let keys=m.cols.split(',');$('tableArea').innerHTML='<table class="result-table"><thead><tr>'+m.headings.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+res.data.map(v=>'<tr>'+keys.map(k=>'<td>'+esc(v[k])+'</td>').join('')+'</tr>').join('')+'</tbody></table>'}
+async function renderTab(tab){activeTab=tab;$('cajaQAForm').hidden=tab!=='caja_qa';$('pagoProveedorForm').hidden=tab!=='proveedores_qa';$('compraForm').hidden=tab!=='compra_qa';$('ventaForm').hidden=tab!=='venta_qa';$('creditoForm').hidden=tab!=='credito_qa';document.querySelectorAll('[data-tab]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tab===tab)));if(tab==='venta_qa'){await prepareSale();return;}if(tab==='credito_qa'){await prepareCredit();return;}if(tab==='compra_qa'){await preparePurchase();return;}if(tab==='proveedores_qa'){await prepareSupplierPayment();return;}if(tab==='fifo_audit'){await showFifoAudit();return;}if(tab==='caja_qa'){await prepareCajaQA();return;}const m=models[tab];$('tableArea').textContent='Consultando datos de prueba…';const res=await client.from(m.table).select(m.cols).limit(15).order('id',{ascending:false});if(res.error){$('tableArea').textContent='No tienes permiso para consultar este módulo o ocurrió un error: '+res.error.message;return}if(!(res.data||[]).length){$('tableArea').textContent='Sin registros visibles para este usuario.';return}let keys=m.cols.split(',');$('tableArea').innerHTML='<table class="result-table"><thead><tr>'+m.headings.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+res.data.map(v=>'<tr>'+keys.map(k=>'<td>'+esc(v[k])+'</td>').join('')+'</tr>').join('')+'</tbody></table>'}
 async function openDashboard(profile,permissions){loadedProfile=profile;$('dashboard').hidden=false;$('rolText').textContent='Rol: '+(profile?.rol||'sin rol');$('stats').innerHTML=permissions.map(p=>'<div class="stat"><b>'+esc(p.error?'—':p.visibles??0)+'</b><span>'+esc(p.modulo)+'</span></div>').join('');await renderTab('productos')}
 function fmtQ(n){return 'Q'+Number(n).toFixed(2)}
 function creditBalance(c){return Math.max(0,Math.round((Number(c.monto)-Number(c.pagado||0))*100)/100)}
@@ -394,6 +421,87 @@ async function showFifoAudit(){
  +'</tbody></table></div>';
  target.innerHTML=summary+productTable+salesTable;
 }
+
+
+let qaCajaPreview=null,pendingCajaOpening=null,pendingCajaClosing=null;
+function qaCashDifference(){
+ const expected=Number(qaCajaPreview?.esperado),counted=Number($('qa_caja_contado').value);
+ const valid=qaCajaPreview?.estado==='abierta'&&$('qa_caja_contado').value.trim()!==''&&Number.isFinite(counted)&&counted>=0&&Number.isFinite(expected);
+ const diff=valid?Math.round((counted-expected)*100)/100:NaN;
+ $('qa_caja_diferencia').textContent=Number.isFinite(diff)?'Diferencia: '+(diff>0?'+':'')+fmtQ(diff):'Diferencia: —';
+ return diff;
+}
+async function prepareCajaQA(){
+ $('cajaQAForm').hidden=false;$('tableArea').textContent='Modo QA: conciliación de Caja, solo Staging.';
+ if(loadedProfile?.rol!=='jefe')throw new Error('Esta conciliación QA está reservada al jefe.');
+ if(!$('qa_caja_fecha').value)$('qa_caja_fecha').value=qaGuatemalaDate();
+ const r=await client.rpc('aq_caja_resumen_qa_auth_v1',{p_fecha:$('qa_caja_fecha').value});
+ if(r.error)throw r.error;
+ qaCajaPreview=r.data||{};
+ const x=qaCajaPreview;
+ $('qa_abrir_caja_form').hidden=x.estado!=='sin_apertura'&&x.estado!=='cerrada';
+ $('qa_cerrar_caja_form').hidden=x.estado!=='abierta';
+ if(x.estado==='abierta'){
+  $('qa_caja_info').innerHTML='<div class="stats"><div class="stat"><b>'+fmtQ(x.fondo_inicial)+'</b><span>Fondo inicial</span></div>'
+   +'<div class="stat"><b>'+fmtQ(x.esperado)+'</b><span>Efectivo esperado</span></div>'
+   +'<div class="stat"><b>'+esc(x.movimientos)+'</b><span>Movimientos desde apertura</span></div></div>'
+   +'<p>Ingresos/salidas de efectivo (neto): <strong>'+fmtQ(x.movimientos_efectivo)+'</strong>. Transferencias: '+fmtQ(x.movimientos_transferencia)+'; otros: '+fmtQ(x.movimientos_otro)+'.</p>'
+   +(Number(x.sin_medio)>0?'<p class="warning">⚠ '+esc(x.sin_medio)+' movimiento(s) sin medio identificado. Revisa Caja y marca la aceptación solo si corresponde contabilizarlos como efectivo.</p>':'')
+   +(Number(x.tipos_desconocidos)>0?'<p class="error">⚠ '+esc(x.tipos_desconocidos)+' movimientos de tipo desconocido: no se permite cerrar hasta corregir.</p>':'');
+  $('qa_caja_contado').value=Number(x.esperado).toFixed(2);
+  $('qa_caja_acepta_sin_medio').checked=false;$('qa_caja_acepta_diferencia').checked=false;
+  qaCashDifference();
+ } else {
+  $('qa_caja_info').textContent=x.estado==='cerrada'?'La última Caja de esta fecha está cerrada. Puedes abrir un nuevo turno de prueba.':'No existe una apertura de Caja para esta fecha. Puedes abrir una de prueba.';
+ }
+}
+$('qa_caja_fecha').addEventListener('change',()=>{pendingCajaOpening=null;pendingCajaClosing=null;prepareCajaQA().catch(e=>$('qa_caja_info').textContent=e.message)});
+$('qa_caja_actualizar').addEventListener('click',()=>prepareCajaQA().catch(e=>$('qa_caja_info').textContent=e.message));
+$('qa_caja_contado').addEventListener('input',()=>{pendingCajaClosing=null;qaCashDifference()});
+['qa_caja_acepta_sin_medio','qa_caja_acepta_diferencia','qa_caja_notas'].forEach(id=>$(id).addEventListener('change',()=>{pendingCajaClosing=null}));
+$('qa_fondo_apertura').addEventListener('input',()=>{pendingCajaOpening=null});
+$('qa_abrir_caja_form').addEventListener('submit',async e=>{
+ e.preventDefault();
+ if(!qaCajaPreview||qaCajaPreview.estado==='abierta')return;
+ const monto=Number($('qa_fondo_apertura').value),fecha=$('qa_caja_fecha').value,btn=$('qa_abrir_caja_boton');
+ if(!fecha||!Number.isFinite(monto)||monto<0||monto>1000000||Math.abs(monto*100-Math.round(monto*100))>.000001){$('qa_apertura_result').textContent='Fondo inválido';return}
+ const payload={p_fecha:fecha,p_monto:monto,p_notas:'[PRUEBA STAGING] Apertura desde GitHub'};
+ const signature=JSON.stringify(payload);
+ if(!pendingCajaOpening||pendingCajaOpening.signature!==signature)pendingCajaOpening={signature,nonce:'QA-APERTURA-GITHUB-'+crypto.randomUUID()};
+ btn.disabled=true;$('qa_apertura_result').textContent='Registrando apertura…';
+ try{
+  const r=await client.rpc('aq_caja_abrir_qa_jefe_v1',{p_nonce:pendingCajaOpening.nonce,...payload});
+  if(r.error)throw r.error;
+  pendingCajaOpening=null;
+  await prepareCajaQA();
+  $('qa_apertura_result').className='ok';$('qa_apertura_result').textContent='✓ Caja QA abierta, movimiento #'+(r.data?.movimiento_id||'?');
+ }catch(err){$('qa_apertura_result').className='error';$('qa_apertura_result').textContent='Error: '+err.message+'. Actualiza estado antes de crear otra operación.'}
+ finally{btn.disabled=false}
+});
+$('qa_cerrar_caja_form').addEventListener('submit',async e=>{
+ e.preventDefault();
+ const x=qaCajaPreview,btn=$('qa_cerrar_caja_boton');
+ if(!x||x.estado!=='abierta')return;
+ const contado=Number($('qa_caja_contado').value),diff=qaCashDifference();
+ if(!Number.isFinite(diff)||Math.abs(contado*100-Math.round(contado*100))>.000001){$('qa_cierre_result').textContent='Monto contado inválido';return}
+ if(Number(x.tipos_desconocidos)>0){$('qa_cierre_result').textContent='No es seguro cerrar con movimientos desconocidos';return}
+ if(Number(x.sin_medio)>0&&!$('qa_caja_acepta_sin_medio').checked){$('qa_cierre_result').textContent='Debes confirmar cómo se tratarán los movimientos sin medio identificado';return}
+ if(diff!==0&&!$('qa_caja_acepta_diferencia').checked){$('qa_cierre_result').textContent='Debes confirmar la diferencia antes del cierre';return}
+ const payload={p_fecha:$('qa_caja_fecha').value,p_apertura_id:x.apertura_id,p_contado:contado,p_esperado_cliente:x.esperado,p_num_movimientos:x.movimientos,
+ p_acepta_sin_clasificar:$('qa_caja_acepta_sin_medio').checked,p_acepta_diferencia:$('qa_caja_acepta_diferencia').checked,p_notas:'[PRUEBA STAGING] '+$('qa_caja_notas').value.trim()};
+ const signature=JSON.stringify(payload);
+ if(!pendingCajaClosing||pendingCajaClosing.signature!==signature)pendingCajaClosing={signature,nonce:'QA-CIERRE-GITHUB-'+crypto.randomUUID()};
+ btn.disabled=true;$('qa_cierre_result').textContent='Cerrando Caja con validación de movimientos…';
+ try{
+  const r=await client.rpc('aq_caja_cerrar_qa_jefe_v1',{p_nonce:pendingCajaClosing.nonce,...payload});
+  if(r.error)throw r.error;
+  pendingCajaClosing=null;
+  const m='✓ Caja cerrada. Esperado: '+fmtQ(r.data?.esperado)+'; contado: '+fmtQ(r.data?.contado)+'; diferencia: '+fmtQ(r.data?.diferencia)+'; cierre #'+(r.data?.movimiento_id||'?')+'.';
+  await prepareCajaQA();
+  $('qa_cierre_result').className='ok';$('qa_cierre_result').textContent=m;
+ }catch(err){$('qa_cierre_result').className='error';$('qa_cierre_result').textContent='No se confirmó el cierre: '+err.message+'. Actualiza el resumen y revisa movimientos antes de reintentar.'}
+ finally{btn.disabled=false}
+});
 
 document.querySelectorAll('[data-tab]').forEach(button=>button.addEventListener('click',()=>{if(!loadedProfile)return;renderTab(button.dataset.tab).catch(e=>$('tableArea').textContent=e.message)}));
 $('registrar').onclick=()=>run(async()=>{const email=$('email').value.trim(),password=$('password').value;if(!email||password.length<8)throw new Error('Introduce correo y contraseña de 8 caracteres o más.');let r=await client.auth.signUp({email,password});$('password').value='';if(r.error)throw r.error;show('Solicitud registrada. Revisa tu correo por si debes confirmar la cuenta. Una cuenta nueva NO recibe permisos automáticamente.',{correo:email,uid:r.data.user?.id||null,sesion_activa:!!r.data.session})});
