@@ -47,6 +47,7 @@
 <button type="button" data-tab="facturas" aria-pressed="false">Facturas</button>
 <button type="button" data-tab="venta_qa" aria-pressed="false">Registrar venta QA</button>
 <button type="button" data-tab="compra_qa" aria-pressed="false">Registrar compra QA</button>
+<button type="button" data-tab="seguridad_qa" aria-pressed="false">Seguridad y permisos QA</button>
 <button type="button" data-tab="caja_qa" aria-pressed="false">Conciliar Caja QA</button>
 <button type="button" data-tab="fifo_audit" aria-pressed="false">Auditoría FIFO</button>
 <button type="button" data-tab="proveedores_qa" aria-pressed="false">Pagar proveedor QA</button>
@@ -179,7 +180,7 @@ async function prepareSale(){
  if(!pr.length||!clients.data.length)throw new Error('No hay clientes o productos ficticios disponibles');
 }
 function esc(v){return String(v??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-async function renderTab(tab){activeTab=tab;$('cajaQAForm').hidden=tab!=='caja_qa';$('pagoProveedorForm').hidden=tab!=='proveedores_qa';$('compraForm').hidden=tab!=='compra_qa';$('ventaForm').hidden=tab!=='venta_qa';$('creditoForm').hidden=tab!=='credito_qa';document.querySelectorAll('[data-tab]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tab===tab)));if(tab==='venta_qa'){await prepareSale();return;}if(tab==='credito_qa'){await prepareCredit();return;}if(tab==='compra_qa'){await preparePurchase();return;}if(tab==='proveedores_qa'){await prepareSupplierPayment();return;}if(tab==='fifo_audit'){await showFifoAudit();return;}if(tab==='caja_qa'){await prepareCajaQA();return;}const m=models[tab];$('tableArea').textContent='Consultando datos de prueba…';const res=await client.from(m.table).select(m.cols).limit(15).order('id',{ascending:false});if(res.error){$('tableArea').textContent='No tienes permiso para consultar este módulo o ocurrió un error: '+res.error.message;return}if(!(res.data||[]).length){$('tableArea').textContent='Sin registros visibles para este usuario.';return}let keys=m.cols.split(',');$('tableArea').innerHTML='<table class="result-table"><thead><tr>'+m.headings.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+res.data.map(v=>'<tr>'+keys.map(k=>'<td>'+esc(v[k])+'</td>').join('')+'</tr>').join('')+'</tbody></table>'}
+async function renderTab(tab){activeTab=tab;$('cajaQAForm').hidden=tab!=='caja_qa';$('pagoProveedorForm').hidden=tab!=='proveedores_qa';$('compraForm').hidden=tab!=='compra_qa';$('ventaForm').hidden=tab!=='venta_qa';$('creditoForm').hidden=tab!=='credito_qa';document.querySelectorAll('[data-tab]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tab===tab)));if(tab==='venta_qa'){await prepareSale();return;}if(tab==='credito_qa'){await prepareCredit();return;}if(tab==='compra_qa'){await preparePurchase();return;}if(tab==='proveedores_qa'){await prepareSupplierPayment();return;}if(tab==='fifo_audit'){await showFifoAudit();return;}if(tab==='caja_qa'){await prepareCajaQA();return;}if(tab==='seguridad_qa'){await showSecurityAudit();return;}const m=models[tab];$('tableArea').textContent='Consultando datos de prueba…';const res=await client.from(m.table).select(m.cols).limit(15).order('id',{ascending:false});if(res.error){$('tableArea').textContent='No tienes permiso para consultar este módulo o ocurrió un error: '+res.error.message;return}if(!(res.data||[]).length){$('tableArea').textContent='Sin registros visibles para este usuario.';return}let keys=m.cols.split(',');$('tableArea').innerHTML='<table class="result-table"><thead><tr>'+m.headings.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+res.data.map(v=>'<tr>'+keys.map(k=>'<td>'+esc(v[k])+'</td>').join('')+'</tr>').join('')+'</tbody></table>'}
 async function openDashboard(profile,permissions){loadedProfile=profile;$('dashboard').hidden=false;$('rolText').textContent='Rol: '+(profile?.rol||'sin rol');$('stats').innerHTML=permissions.map(p=>'<div class="stat"><b>'+esc(p.error?'—':p.visibles??0)+'</b><span>'+esc(p.modulo)+'</span></div>').join('');await renderTab('productos')}
 function fmtQ(n){return 'Q'+Number(n).toFixed(2)}
 function creditBalance(c){return Math.max(0,Math.round((Number(c.monto)-Number(c.pagado||0))*100)/100)}
@@ -502,6 +503,33 @@ $('qa_cerrar_caja_form').addEventListener('submit',async e=>{
  }catch(err){$('qa_cierre_result').className='error';$('qa_cierre_result').textContent='No se confirmó el cierre: '+err.message+'. Actualiza el resumen y revisa movimientos antes de reintentar.'}
  finally{btn.disabled=false}
 });
+
+
+async function showSecurityAudit(){
+ const target=$('tableArea');target.textContent='Comprobando permisos de la sesión actual…';
+ const perfil=await client.rpc('aq_mi_perfil_seguro');
+ if(perfil.error)throw perfil.error;
+ const role=perfil.data?.rol||'sin rol';
+ const checks=[
+ {label:'Perfil vinculado y autenticado',kind:'ok',value:'Rol: '+role},
+ {label:'Permisos del rol',kind:role==='jefe'?'ok':'info',value:role==='jefe'?'Cuenta de jefe QA':'Permisos limitados según el servidor'},
+ ];
+ const cost=await client.from('productos').select('costo').limit(1);
+ checks.push({label:'Lectura directa del costo de compra',kind:cost.error?'ok':'error',value:cost.error?'BLOQUEADA por permisos':'ADVERTENCIA: acceso permitido'});
+ const reads=[['Productos','productos'],['Clientes','clientes'],['Ventas','ventas'],['Créditos','creditos'],['Caja','caja'],['Facturas de proveedores','facturas_proveedores'],['Deudas de proveedores','deudas_proveedores']];
+ const results=await Promise.all(reads.map(async ([label,table])=>{
+  const x=await client.from(table).select('id',{head:true,count:'exact'});
+  return {label,kind:x.error?'info':'ok',value:x.error?'Sin permiso de consulta':(x.count??0)+' registros visibles'};
+ }));
+ checks.push(...results);
+ target.innerHTML='<h3>Diagnóstico de acceso de tu sesión</h3>'
+ +'<p class="small">Consultas de solo lectura a la base Staging. No intenta escribir, ni exponer contraseñas o tokens. La interfaz no reemplaza las políticas de seguridad del servidor.</p>'
+ +'<table class="result-table"><thead><tr><th>Comprobación</th><th>Resultado</th></tr></thead><tbody>'
+ +checks.map(x=>'<tr><td>'+esc(x.label)+'</td><td class="'+(x.kind==='error'?'error':x.kind==='ok'?'ok':'')+'">'+esc(x.value)+'</td></tr>').join('')
+ +'</tbody></table>'
+ +(role==='jefe'?'<p class="warning"><strong>Pendiente:</strong> prueba de acceso con cuenta real de vendedor QA. Las simulaciones de permisos no demuestran por sí solas que todos los flujos de vendedor sean seguros.</p>':'<p class="small">Las restricciones se aplican en Supabase, además de en esta pantalla.</p>')
+ +'<p class="small">Staging: 68 tablas con RLS activo, comprobado en auditoría del servidor. Los permisos de cobro de créditos ahora validan el acceso al cliente. Caja global está limitada al jefe mientras se implementan turnos individuales.</p>';
+}
 
 document.querySelectorAll('[data-tab]').forEach(button=>button.addEventListener('click',()=>{if(!loadedProfile)return;renderTab(button.dataset.tab).catch(e=>$('tableArea').textContent=e.message)}));
 $('registrar').onclick=()=>run(async()=>{const email=$('email').value.trim(),password=$('password').value;if(!email||password.length<8)throw new Error('Introduce correo y contraseña de 8 caracteres o más.');let r=await client.auth.signUp({email,password});$('password').value='';if(r.error)throw r.error;show('Solicitud registrada. Revisa tu correo por si debes confirmar la cuenta. Una cuenta nueva NO recibe permisos automáticamente.',{correo:email,uid:r.data.user?.id||null,sesion_activa:!!r.data.session})});
