@@ -39,6 +39,7 @@
 <button type="button" data-tab="facturas" aria-pressed="false">Facturas</button>
 <button type="button" data-tab="venta_qa" aria-pressed="false">Registrar venta QA</button>
 <button type="button" data-tab="compra_qa" aria-pressed="false">Registrar compra QA</button>
+<button type="button" data-tab="fifo_audit" aria-pressed="false">Auditoría FIFO</button>
 <button type="button" data-tab="proveedores_qa" aria-pressed="false">Pagar proveedor QA</button>
 <button type="button" data-tab="credito_qa" aria-pressed="false">Abonar crédito QA</button>
 </div>
@@ -143,7 +144,7 @@ async function prepareSale(){
  if(!pr.length||!clients.data.length)throw new Error('No hay clientes o productos ficticios disponibles');
 }
 function esc(v){return String(v??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-async function renderTab(tab){activeTab=tab;$('pagoProveedorForm').hidden=tab!=='proveedores_qa';$('compraForm').hidden=tab!=='compra_qa';$('ventaForm').hidden=tab!=='venta_qa';$('creditoForm').hidden=tab!=='credito_qa';document.querySelectorAll('[data-tab]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tab===tab)));if(tab==='venta_qa'){await prepareSale();return;}if(tab==='credito_qa'){await prepareCredit();return;}if(tab==='compra_qa'){await preparePurchase();return;}if(tab==='proveedores_qa'){await prepareSupplierPayment();return;}const m=models[tab];$('tableArea').textContent='Consultando datos de prueba…';const res=await client.from(m.table).select(m.cols).limit(15).order('id',{ascending:false});if(res.error){$('tableArea').textContent='No tienes permiso para consultar este módulo o ocurrió un error: '+res.error.message;return}if(!(res.data||[]).length){$('tableArea').textContent='Sin registros visibles para este usuario.';return}let keys=m.cols.split(',');$('tableArea').innerHTML='<table class="result-table"><thead><tr>'+m.headings.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+res.data.map(v=>'<tr>'+keys.map(k=>'<td>'+esc(v[k])+'</td>').join('')+'</tr>').join('')+'</tbody></table>'}
+async function renderTab(tab){activeTab=tab;$('pagoProveedorForm').hidden=tab!=='proveedores_qa';$('compraForm').hidden=tab!=='compra_qa';$('ventaForm').hidden=tab!=='venta_qa';$('creditoForm').hidden=tab!=='credito_qa';document.querySelectorAll('[data-tab]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tab===tab)));if(tab==='venta_qa'){await prepareSale();return;}if(tab==='credito_qa'){await prepareCredit();return;}if(tab==='compra_qa'){await preparePurchase();return;}if(tab==='proveedores_qa'){await prepareSupplierPayment();return;}if(tab==='fifo_audit'){await showFifoAudit();return;}const m=models[tab];$('tableArea').textContent='Consultando datos de prueba…';const res=await client.from(m.table).select(m.cols).limit(15).order('id',{ascending:false});if(res.error){$('tableArea').textContent='No tienes permiso para consultar este módulo o ocurrió un error: '+res.error.message;return}if(!(res.data||[]).length){$('tableArea').textContent='Sin registros visibles para este usuario.';return}let keys=m.cols.split(',');$('tableArea').innerHTML='<table class="result-table"><thead><tr>'+m.headings.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+res.data.map(v=>'<tr>'+keys.map(k=>'<td>'+esc(v[k])+'</td>').join('')+'</tr>').join('')+'</tbody></table>'}
 async function openDashboard(profile,permissions){loadedProfile=profile;$('dashboard').hidden=false;$('rolText').textContent='Rol: '+(profile?.rol||'sin rol');$('stats').innerHTML=permissions.map(p=>'<div class="stat"><b>'+esc(p.error?'—':p.visibles??0)+'</b><span>'+esc(p.modulo)+'</span></div>').join('');await renderTab('productos')}
 function fmtQ(n){return 'Q'+Number(n).toFixed(2)}
 function creditBalance(c){return Math.max(0,Math.round((Number(c.monto)-Number(c.pagado||0))*100)/100)}
@@ -359,6 +360,32 @@ $('pagoProveedorForm').addEventListener('submit',async e=>{
    $('qa_pago_proveedor_result').textContent='No se pudo confirmar pago: '+err.message+'. Si hubo error de red, no cambies campos al reintentar. Comprueba Caja antes de efectuar otro pago.';
  }finally{btn.disabled=qaSupplierDebts.size===0}
 });
+
+
+async function showFifoAudit(){
+ if(loadedProfile?.rol!=='jefe')throw new Error('Solo el jefe puede acceder a la auditoría FIFO.');
+ const target=$('tableArea');
+ target.textContent='Preparando auditoría FIFO de Staging…';
+ const r=await client.rpc('aq_auditoria_fifo_auth_v1');
+ if(r.error)throw r.error;
+ const data=r.data||{},stats=data.resumen||{},products=data.productos||[],sales=data.ventas||[];
+ const summary='<h3>Auditoría FIFO y costo de ventas</h3>'
+ +'<p class="warning">'+esc(data.advertencia||'Los márgenes son brutos y excluyen otros costos.')+'</p>'
+ +'<div class="stats">'
+ +'<div class="stat"><b>'+esc(stats.productos_con_diferencia??0)+'</b><span>Productos por conciliar</span></div>'
+ +'<div class="stat"><b>'+esc(stats.unidades_sin_lote??0)+'</b><span>Unidades sin lote documentado</span></div>'
+ +'<div class="stat"><b>'+fmtQ(stats.valor_inventario_lotes??0)+'</b><span>Valor de unidades con lote</span></div>'
+ +'</div>';
+ const productTable='<h4>Conciliación de inventario</h4><div class="table-wrap"><table class="result-table"><thead><tr><th>Producto</th><th>Stock</th><th>En lotes</th><th>Sin lote</th><th>Valor lotes</th></tr></thead><tbody>'
+ +products.map(p=>'<tr><td>'+esc(p.producto)+'</td><td>'+esc(p.stock)+'</td><td>'+esc(p.lotes_disponibles)+'</td><td>'+esc(p.unidades_sin_lote)+'</td><td>'+fmtQ(p.valor_lotes)+'</td></tr>').join('')
+ +'</tbody></table></div>';
+ const salesTable='<h4>Ventas recientes: costo FIFO y margen bruto</h4><div class="table-wrap"><table class="result-table"><thead><tr><th>Venta</th><th>Total</th><th>Costo FIFO</th><th>Margen bruto</th><th>Desglose de lotes</th></tr></thead><tbody>'
+ +sales.map(v=>'<tr><td>#'+esc(v.venta_id)+'</td><td>'+fmtQ(v.total)+'</td><td>'+fmtQ(v.costo_fifo)+'</td><td>'+fmtQ(v.margen_bruto)+'</td><td>'
+ +(v.desglose||[]).map(x=>esc(x.cantidad)+' × '+fmtQ(x.costo_unitario)+' (lote '+esc(x.lote_id??'SIN LOTE')+')').join('; ')
+ +(Number(v.unidades_sin_lote)>0?' <strong class="error">Costo estimado sin lote</strong>':'')+'</td></tr>').join('')
+ +'</tbody></table></div>';
+ target.innerHTML=summary+productTable+salesTable;
+}
 
 document.querySelectorAll('[data-tab]').forEach(button=>button.addEventListener('click',()=>{if(!loadedProfile)return;renderTab(button.dataset.tab).catch(e=>$('tableArea').textContent=e.message)}));
 $('registrar').onclick=()=>run(async()=>{const email=$('email').value.trim(),password=$('password').value;if(!email||password.length<8)throw new Error('Introduce correo y contraseña de 8 caracteres o más.');let r=await client.auth.signUp({email,password});$('password').value='';if(r.error)throw r.error;show('Solicitud registrada. Revisa tu correo por si debes confirmar la cuenta. Una cuenta nueva NO recibe permisos automáticamente.',{correo:email,uid:r.data.user?.id||null,sesion_activa:!!r.data.session})});
