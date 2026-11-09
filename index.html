@@ -13,6 +13,14 @@
 @media(max-width:520px){.qa-form .qa-cols{grid-template-columns:1fr}}
 .qa-form select{box-sizing:border-box}
 
+
+/* Tablas QA legibles en pantallas estrechas: desplazamiento horizontal sin partir importes. */
+#tableArea{max-width:100%;overflow-x:auto}
+#tableArea .table-wrap{max-width:100%;overflow-x:auto}
+#tableArea .result-table{min-width:610px;width:100%;table-layout:auto}
+#tableArea .result-table th,#tableArea .result-table td{overflow-wrap:normal;word-break:normal;white-space:nowrap;vertical-align:top}
+#tableArea .result-table th:last-child,#tableArea .result-table td:last-child{white-space:normal;min-width:210px;line-height:1.5}
+#tableArea .result-table th:first-child,#tableArea .result-table td:first-child{white-space:nowrap}
 </style>
 </head>
 <body><main>
