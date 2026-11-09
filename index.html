@@ -8,6 +8,11 @@
 :root{font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;color-scheme:light}body{background:#eaf1f8;margin:0;padding:24px;color:#1b3044}main{max-width:640px;margin:0 auto;background:#fff;border-radius:16px;padding:25px;box-shadow:0 7px 30px #13375e16}h1{font-size:1.4rem}label{display:block;font-weight:600;margin:12px 0 5px}input{width:100%;box-sizing:border-box;border:1px solid #b9c9dc;border-radius:9px;padding:12px;font-size:1rem}button{border:none;background:#1067b7;color:#fff;border-radius:9px;padding:12px 16px;margin:11px 7px 0 0;cursor:pointer;font-weight:650}button.secondary{background:#dae9f7;color:#124b75}button:disabled{opacity:.6;cursor:wait}.note{background:#fff6da;border-left:4px solid #f6b739;padding:11px 14px;border-radius:8px}pre{white-space:pre-wrap;word-break:break-word;background:#f3f7fb;padding:14px;border-radius:9px;max-height:360px;overflow:auto}.small{font-size:.9rem;color:#5c7185}#status{margin-top:14px;font-weight:650}
 
 .qa-form{border:1px solid #dbe7f2;padding:16px;border-radius:12px;margin-top:16px;background:#f9fcff}.qa-form h3{margin:0 0 6px}.qa-form select,.qa-form input{width:100%;margin:4px 0 12px;border:1px solid #bdcfe0;border-radius:9px;padding:10px;background:#fff;font:inherit}.qa-form label{font-size:.92rem}.qa-form button{margin:6px 0 0}.qa-form p{font-size:.87rem}.qa-form[hidden]{display:none}.dashboard{margin-top:20px;padding-top:16px;border-top:1px solid #d8e3ee}.dashboard[hidden]{display:none}.dash-title{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(115px,1fr));gap:10px;margin:12px 0}.stat{background:#f3f8fd;padding:14px 12px;border-radius:12px;border:1px solid #e0eaf4}.stat b{font-size:1.6rem;display:block}.stat span{font-size:.82rem;color:#48627d}.dashbar{display:flex;gap:7px;flex-wrap:wrap;margin:9px 0}.dashbar button{margin:0;background:#dde9f4;color:#16476e}.dashbar button[aria-pressed=true]{background:#1162a9;color:#fff}.result-table{border-collapse:collapse;width:100%;font-size:.9rem;margin-top:12px}.result-table th,.result-table td{border-bottom:1px solid #e1e9f1;padding:8px;text-align:left;overflow-wrap:anywhere}.table-wrap{overflow-x:auto}.warning{color:#775000;font-size:.88rem}.role{padding:4px 9px;border-radius:20px;background:#dfeefc;font-size:.9rem;font-weight:700}.ok{color:#11723c}.error{color:#9d2c24}.balance{font-size:1.3rem;color:#14558d;font-weight:800}.qa-form .hint{font-size:.83rem;color:#536c82;margin:0 0 12px}.qa-form textarea{width:100%;box-sizing:border-box;min-height:65px;border:1px solid #bdcfe0;border-radius:9px;padding:10px;font:inherit}
+
+.qa-form .qa-cols{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:520px){.qa-form .qa-cols{grid-template-columns:1fr}}
+.qa-form select{box-sizing:border-box}
+
 </style>
 </head>
 <body><main>
@@ -23,7 +28,7 @@
 <pre id="result">La pantalla no muestra contraseñas ni tokens.</pre>
 <section class="dashboard" id="dashboard" hidden>
 <div class="dash-title"><h2 style="margin:0">Panel de pruebas de AQUABRI</h2><span class="role" id="rolText"></span></div>
-<p class="small">Consultas y operaciones de prueba con datos ficticios en Staging. Los formularios de venta y crédito sí modifican la base de pruebas.</p>
+<p class="small">Consultas y operaciones de prueba con datos ficticios en Staging. Los formularios de venta, crédito y compras sí modifican la base de pruebas.</p>
 <div class="stats" id="stats"></div>
 <div class="dashbar" id="dashbar">
 <button type="button" data-tab="productos" aria-pressed="true">Productos</button>
@@ -33,6 +38,7 @@
 <button type="button" data-tab="caja" aria-pressed="false">Caja</button>
 <button type="button" data-tab="facturas" aria-pressed="false">Facturas</button>
 <button type="button" data-tab="venta_qa" aria-pressed="false">Registrar venta QA</button>
+<button type="button" data-tab="compra_qa" aria-pressed="false">Registrar compra QA</button>
 <button type="button" data-tab="credito_qa" aria-pressed="false">Abonar crédito QA</button>
 </div>
 <div class="table-wrap" id="tableArea"></div>
@@ -48,6 +54,31 @@
 <button id="qa_guardar" type="submit">Guardar venta de prueba</button>
 <p id="qa_venta_result" role="status"></p>
 </form>
+
+<form id="compraForm" class="qa-form" hidden>
+<h3>Registrar compra ficticia</h3>
+<p class="hint">Solo Staging. Registra la factura, aumenta el stock y crea un lote FIFO. Si se elige crédito, genera deuda; si se paga desde Caja, registra una salida de dinero. No registra operaciones reales.</p>
+<label for="qa_proveedor">Proveedor de prueba</label>
+<input id="qa_proveedor" maxlength="200" value="PROVEEDOR FICTICIO QA" required>
+<div class="qa-cols">
+<div><label for="qa_num_factura">Número de factura (opcional)</label><input id="qa_num_factura" maxlength="100" placeholder="QA-001"></div>
+<div><label for="qa_compra_fecha">Fecha</label><input type="date" id="qa_compra_fecha" required></div>
+</div>
+<label for="qa_compra_producto">Producto ficticio</label><select id="qa_compra_producto" required></select>
+<div class="qa-cols">
+<div><label for="qa_compra_cant">Cantidad</label><input id="qa_compra_cant" type="number" min="1" max="100000" step="1" value="2" required></div>
+<div><label for="qa_compra_costo">Costo unitario (Q)</label><input id="qa_compra_costo" type="number" min="0" max="1000000" step="0.0001" value="5.00" required></div>
+</div>
+<div class="qa-cols">
+<div><label for="qa_compra_estado">Pago de factura</label><select id="qa_compra_estado"><option value="Pendiente">Crédito / Pendiente</option><option value="Pagado">Pagado</option></select></div>
+<div><label for="qa_compra_origen">Origen del dinero (si pagado)</label><select id="qa_compra_origen" disabled><option value="externo">Fuera de Caja</option><option value="caja">Caja AQUABRI</option></select></div>
+</div>
+<label for="qa_compra_notas">Observaciones</label><textarea id="qa_compra_notas" maxlength="500" placeholder="Factura de prueba"></textarea>
+<p><strong>Total de factura: <span id="qa_compra_total">Q0.00</span></strong></p>
+<button id="qa_guardar_compra" type="submit">Guardar compra de prueba</button>
+<p id="qa_compra_result" role="status" aria-live="polite"></p>
+</form>
+
 <form id="creditoForm" class="qa-form" hidden>
 <h3>Cobrar crédito ficticio</h3>
 <p class="hint">Solo en Staging. Registra el abono en el crédito seleccionado y crea un único movimiento en Caja. La pantalla consulta el saldo actualizado al confirmar.</p>
@@ -62,7 +93,7 @@
 </form>
 <p class="warning">Esta pantalla no sustituye el sistema completo de producción. Aquí se prueban sesión, permisos y consultas antes de incorporar ventas y Caja.</p>
 </section>
-<p class="small">Únicamente para pruebas. Las ventas y los abonos de esta página escriben en Staging; no procesan dinero real.</p>
+<p class="small">Únicamente para pruebas. Las ventas, las compras y los abonos de esta página escriben en Staging; no procesan dinero real.</p>
 </main>
 <script>
 'use strict';
@@ -93,7 +124,7 @@ async function prepareSale(){
  if(!pr.length||!clients.data.length)throw new Error('No hay clientes o productos ficticios disponibles');
 }
 function esc(v){return String(v??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-async function renderTab(tab){activeTab=tab;$('ventaForm').hidden=tab!=='venta_qa';$('creditoForm').hidden=tab!=='credito_qa';document.querySelectorAll('[data-tab]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tab===tab)));if(tab==='venta_qa'){await prepareSale();return;}if(tab==='credito_qa'){await prepareCredit();return;}const m=models[tab];$('tableArea').textContent='Consultando datos de prueba…';const res=await client.from(m.table).select(m.cols).limit(15).order('id',{ascending:false});if(res.error){$('tableArea').textContent='No tienes permiso para consultar este módulo o ocurrió un error: '+res.error.message;return}if(!(res.data||[]).length){$('tableArea').textContent='Sin registros visibles para este usuario.';return}let keys=m.cols.split(',');$('tableArea').innerHTML='<table class="result-table"><thead><tr>'+m.headings.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+res.data.map(v=>'<tr>'+keys.map(k=>'<td>'+esc(v[k])+'</td>').join('')+'</tr>').join('')+'</tbody></table>'}
+async function renderTab(tab){activeTab=tab;$('compraForm').hidden=tab!=='compra_qa';$('ventaForm').hidden=tab!=='venta_qa';$('creditoForm').hidden=tab!=='credito_qa';document.querySelectorAll('[data-tab]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tab===tab)));if(tab==='venta_qa'){await prepareSale();return;}if(tab==='credito_qa'){await prepareCredit();return;}if(tab==='compra_qa'){await preparePurchase();return;}const m=models[tab];$('tableArea').textContent='Consultando datos de prueba…';const res=await client.from(m.table).select(m.cols).limit(15).order('id',{ascending:false});if(res.error){$('tableArea').textContent='No tienes permiso para consultar este módulo o ocurrió un error: '+res.error.message;return}if(!(res.data||[]).length){$('tableArea').textContent='Sin registros visibles para este usuario.';return}let keys=m.cols.split(',');$('tableArea').innerHTML='<table class="result-table"><thead><tr>'+m.headings.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+res.data.map(v=>'<tr>'+keys.map(k=>'<td>'+esc(v[k])+'</td>').join('')+'</tr>').join('')+'</tbody></table>'}
 async function openDashboard(profile,permissions){loadedProfile=profile;$('dashboard').hidden=false;$('rolText').textContent='Rol: '+(profile?.rol||'sin rol');$('stats').innerHTML=permissions.map(p=>'<div class="stat"><b>'+esc(p.error?'—':p.visibles??0)+'</b><span>'+esc(p.modulo)+'</span></div>').join('');await renderTab('productos')}
 function fmtQ(n){return 'Q'+Number(n).toFixed(2)}
 function creditBalance(c){return Math.max(0,Math.round((Number(c.monto)-Number(c.pagado||0))*100)/100)}
@@ -181,6 +212,73 @@ $('ventaForm').addEventListener('submit',async e=>{
  await prepareSale();
  }catch(err){$('qa_venta_result').textContent='NO se pudo confirmar: '+err.message+'; si hay dudas, verifica el historial antes de reintentar';}finally{b.disabled=false}
 });
+
+const qaCompraProductos=new Map();let pendingPurchaseOp=null;
+function qaPurchaseTotal(){
+ const q=Number($('qa_compra_cant').value),c=Number($('qa_compra_costo').value);
+ const valid=Number.isInteger(q)&&q>=1&&q<=100000&&Number.isFinite(c)&&c>=0&&c<=1000000&&Math.abs(c*10000-Math.round(c*10000))<0.00001;
+ const total=valid?Math.round(q*c*100)/100:NaN;
+ $('qa_compra_total').textContent=Number.isFinite(total)?fmtQ(total):'Cantidad o costo inválido';
+ return total;
+}
+function qaGuatemalaDate(){
+ const p=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'America/Guatemala',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).filter(x=>x.type!=='literal').map(x=>[x.type,x.value]));
+ return p.year+'-'+p.month+'-'+p.day;
+}
+async function preparePurchase(){
+ $('compraForm').hidden=false;
+ $('tableArea').textContent='Modo QA: alta de factura de compra en Staging.';
+ if(!['jefe','inventario'].includes(loadedProfile?.rol||''))throw new Error('Tu rol no está autorizado para registrar compras.');
+ const r=await client.from('productos').select('id,nombre,stock,retornable,activo').order('id');
+ if(r.error)throw r.error;
+ const items=(r.data||[]).filter(x=>x.activo!==false&& !['si','sí','true','1'].includes(String(x.retornable||'').trim().toLowerCase()));
+ qaCompraProductos.clear();items.forEach(x=>qaCompraProductos.set(String(x.id),x));
+ $('qa_compra_producto').replaceChildren(...items.map(x=>new Option(x.nombre+' · Stock: '+x.stock, String(x.id))));
+ if(!$('qa_compra_fecha').value)$('qa_compra_fecha').value=qaGuatemalaDate();
+ $('qa_guardar_compra').disabled=!items.length;
+ qaPurchaseTotal();
+ if(!items.length)$('qa_compra_result').textContent='No hay productos ficticios no retornables disponibles para esta prueba.';
+}
+$('qa_compra_estado').addEventListener('change',()=>{
+ const paid=$('qa_compra_estado').value==='Pagado';
+ $('qa_compra_origen').disabled=!paid;
+ if(!paid)$('qa_compra_origen').value='externo';
+ pendingPurchaseOp=null;
+});
+['qa_proveedor','qa_num_factura','qa_compra_fecha','qa_compra_producto','qa_compra_cant','qa_compra_costo','qa_compra_origen','qa_compra_notas'].forEach(id=>{
+ $(id).addEventListener('input',()=>{pendingPurchaseOp=null;qaPurchaseTotal()});
+ $(id).addEventListener('change',()=>{pendingPurchaseOp=null;qaPurchaseTotal()});
+});
+$('compraForm').addEventListener('submit',async e=>{
+ e.preventDefault();
+ const btn=$('qa_guardar_compra');if(btn.disabled)return;
+ const product=qaCompraProductos.get($('qa_compra_producto').value);
+ const qty=Number($('qa_compra_cant').value),cost=Number($('qa_compra_costo').value),total=qaPurchaseTotal();
+ const prov=$('qa_proveedor').value.trim(),num=$('qa_num_factura').value.trim(),date=$('qa_compra_fecha').value;
+ if(!product||prov.length<2||prov.length>200||!Number.isInteger(qty)||qty<1||qty>100000||!Number.isFinite(total)||!date||!Number.isFinite(cost)||cost<0||cost>1000000) {
+   $('qa_compra_result').textContent='Revisa proveedor, fecha, cantidad y costo.';return;
+ }
+ const state=$('qa_compra_estado').value;
+ const factura={proveedor:prov,numero_factura:num,fecha:date,total,estado:state,origen_pago:state==='Pagado'?$('qa_compra_origen').value:'externo',notas:'[PRUEBA STAGING] '+$('qa_compra_notas').value.trim()};
+ const items=[{tipo:'producto',id:Number(product.id),nombre:product.nombre,cantidad:qty,costo:cost}];
+ const signature=JSON.stringify({factura,items});
+ if(!pendingPurchaseOp||pendingPurchaseOp.signature!==signature)pendingPurchaseOp={signature,nonce:'QA-COMPRA-GITHUB-'+crypto.randomUUID()};
+ const nonce=pendingPurchaseOp.nonce;
+ btn.disabled=true;$('qa_compra_result').className='';$('qa_compra_result').textContent='Registrando factura e inventario en Staging…';
+ try{
+   const r=await client.rpc('aq_comprar_auth_v2',{p_nonce:nonce,p_factura:factura,p_items:items});
+   if(r.error)throw r.error;
+   pendingPurchaseOp=null;
+   const d=r.data||{};
+   $('qa_compra_result').className='ok';
+   $('qa_compra_result').textContent='✓ Factura #'+(d.id||'?')+' · '+fmtQ(d.total??total)+' · '+state+(state==='Pagado'?(factura.origen_pago==='caja'?' · Salida de Caja':' · Pago externo'):' · Deuda del proveedor')+(d.repetida?' · Sin duplicar':'')+'. Inventario aumentado en '+qty+' unidades. Revisa Productos y Facturas.';
+   await preparePurchase();
+ }catch(err){
+   $('qa_compra_result').className='error';
+   $('qa_compra_result').textContent='No se pudo confirmar la compra: '+err.message+'. Si hubo un error de red, vuelve a enviar SIN cambiar los campos para reutilizar la clave de operación.';
+ }finally{btn.disabled=qaCompraProductos.size===0;}
+});
+
 document.querySelectorAll('[data-tab]').forEach(button=>button.addEventListener('click',()=>{if(!loadedProfile)return;renderTab(button.dataset.tab).catch(e=>$('tableArea').textContent=e.message)}));
 $('registrar').onclick=()=>run(async()=>{const email=$('email').value.trim(),password=$('password').value;if(!email||password.length<8)throw new Error('Introduce correo y contraseña de 8 caracteres o más.');let r=await client.auth.signUp({email,password});$('password').value='';if(r.error)throw r.error;show('Solicitud registrada. Revisa tu correo por si debes confirmar la cuenta. Una cuenta nueva NO recibe permisos automáticamente.',{correo:email,uid:r.data.user?.id||null,sesion_activa:!!r.data.session})});
 $('entrar').onclick=()=>run(async()=>{const email=$('email').value.trim(),password=$('password').value;if(!email||!password)throw new Error('Escribe el correo y contraseña de pruebas.');let r=await client.auth.signInWithPassword({email,password});$('password').value='';if(r.error)throw r.error;show('Inicio de sesión realizado. Ahora pulsa Verificar acceso.',{uid:r.data.user?.id||null,correo:r.data.user?.email})});
