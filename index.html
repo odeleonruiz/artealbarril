@@ -21,6 +21,10 @@
 #tableArea .result-table th,#tableArea .result-table td{overflow-wrap:normal;word-break:normal;white-space:nowrap;vertical-align:top}
 #tableArea .result-table th:last-child,#tableArea .result-table td:last-child{white-space:normal;min-width:210px;line-height:1.5}
 #tableArea .result-table th:first-child,#tableArea .result-table td:first-child{white-space:nowrap}
+.perm-row select{min-width:155px;max-width:210px;font-size:.87rem;padding:7px;border:1px solid #bdd0df;border-radius:7px}
+.perm-row button{padding:7px 10px;margin:0;white-space:nowrap}
+.perm-base{font-size:.82rem;color:#506b80}.perm-effective{font-weight:650}
+#qa_permisos_tabla .result-table{min-width:620px}#permisosQAForm .table-wrap{overflow-x:auto;max-width:100%}
 </style>
 </head>
 <body><main>
@@ -48,12 +52,22 @@
 <button type="button" data-tab="venta_qa" aria-pressed="false">Registrar venta QA</button>
 <button type="button" data-tab="compra_qa" aria-pressed="false">Registrar compra QA</button>
 <button type="button" data-tab="vendedor_solicitudes" aria-pressed="false">Solicitudes vendedor QA</button>
+<button type="button" id="qa_perm_tab" data-tab="permisos_qa" aria-pressed="false" hidden>Administrar permisos QA</button>
 <button type="button" data-tab="seguridad_qa" aria-pressed="false">Seguridad y permisos QA</button>
 <button type="button" data-tab="caja_qa" aria-pressed="false">Conciliar Caja QA</button>
 <button type="button" data-tab="fifo_audit" aria-pressed="false">Auditoría FIFO</button>
 <button type="button" data-tab="proveedores_qa" aria-pressed="false">Pagar proveedor QA</button>
 <button type="button" data-tab="credito_qa" aria-pressed="false">Abonar crédito QA</button>
 </div>
+<section id="permisosQAForm" class="qa-form" hidden>
+<h3>Permisos del personal — Laboratorio</h3>
+<p class="hint">Los permisos predeterminados vienen del rol. Solo el jefe puede dar o quitar accesos individuales. El cambio se valida en Supabase y queda auditado. Esta pantalla opera solamente con cuentas ficticias de Staging.</p>
+<label for="qa_perm_usuario">Empleado de pruebas</label><select id="qa_perm_usuario"></select>
+<p id="qa_perm_rol" class="small"></p>
+<button type="button" id="qa_perm_recargar" class="secondary">Actualizar permisos</button>
+<div class="table-wrap" id="qa_permisos_tabla"></div>
+<p id="qa_perm_estado" role="status" aria-live="polite"></p>
+</section>
 <div class="table-wrap" id="tableArea"></div>
 
 
@@ -190,8 +204,62 @@ async function prepareSale(){
  if(!pr.length||!clients.data.length)throw new Error('No hay clientes o productos ficticios disponibles');
 }
 function esc(v){return String(v??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-async function renderTab(tab){activeTab=tab;$('vendedorQAForm').hidden=tab!=='vendedor_solicitudes';$('cajaQAForm').hidden=tab!=='caja_qa';$('pagoProveedorForm').hidden=tab!=='proveedores_qa';$('compraForm').hidden=tab!=='compra_qa';$('ventaForm').hidden=tab!=='venta_qa';$('creditoForm').hidden=tab!=='credito_qa';document.querySelectorAll('[data-tab]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tab===tab)));if(tab==='venta_qa'){await prepareSale();return;}if(tab==='credito_qa'){await prepareCredit();return;}if(tab==='compra_qa'){await preparePurchase();return;}if(tab==='proveedores_qa'){await prepareSupplierPayment();return;}if(tab==='fifo_audit'){await showFifoAudit();return;}if(tab==='caja_qa'){await prepareCajaQA();return;}if(tab==='seguridad_qa'){await showSecurityAudit();return;}if(tab==='vendedor_solicitudes'){await prepareVendorRequests();return;}const m=models[tab];$('tableArea').textContent='Consultando datos de prueba…';const res=await client.from(m.table).select(m.cols).limit(15).order('id',{ascending:false});if(res.error){$('tableArea').textContent='No tienes permiso para consultar este módulo o ocurrió un error: '+res.error.message;return}if(!(res.data||[]).length){$('tableArea').textContent='Sin registros visibles para este usuario.';return}let keys=m.cols.split(',');$('tableArea').innerHTML='<table class="result-table"><thead><tr>'+m.headings.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+res.data.map(v=>'<tr>'+keys.map(k=>'<td>'+esc(v[k])+'</td>').join('')+'</tr>').join('')+'</tbody></table>'}
-async function openDashboard(profile,permissions){loadedProfile=profile;$('dashboard').hidden=false;$('rolText').textContent='Rol: '+(profile?.rol||'sin rol');$('stats').innerHTML=permissions.map(p=>'<div class="stat"><b>'+esc(p.error?'—':p.visibles??0)+'</b><span>'+esc(p.modulo)+'</span></div>').join('');await renderTab('productos')}
+async function renderTab(tab){activeTab=tab;$('permisosQAForm').hidden=tab!=='permisos_qa';$('vendedorQAForm').hidden=tab!=='vendedor_solicitudes';$('cajaQAForm').hidden=tab!=='caja_qa';$('pagoProveedorForm').hidden=tab!=='proveedores_qa';$('compraForm').hidden=tab!=='compra_qa';$('ventaForm').hidden=tab!=='venta_qa';$('creditoForm').hidden=tab!=='credito_qa';document.querySelectorAll('[data-tab]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tab===tab)));if(tab==='venta_qa'){await prepareSale();return;}if(tab==='credito_qa'){await prepareCredit();return;}if(tab==='compra_qa'){await preparePurchase();return;}if(tab==='proveedores_qa'){await prepareSupplierPayment();return;}if(tab==='fifo_audit'){await showFifoAudit();return;}if(tab==='caja_qa'){await prepareCajaQA();return;}if(tab==='seguridad_qa'){await showSecurityAudit();return;}if(tab==='permisos_qa'){await cargarPermisosQA(true);return;}if(tab==='vendedor_solicitudes'){await prepareVendorRequests();return;}const m=models[tab];$('tableArea').textContent='Consultando datos de prueba…';const res=await client.from(m.table).select(m.cols).limit(15).order('id',{ascending:false});if(res.error){$('tableArea').textContent='No tienes permiso para consultar este módulo o ocurrió un error: '+res.error.message;return}if(!(res.data||[]).length){$('tableArea').textContent='Sin registros visibles para este usuario.';return}let keys=m.cols.split(',');$('tableArea').innerHTML='<table class="result-table"><thead><tr>'+m.headings.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+res.data.map(v=>'<tr>'+keys.map(k=>'<td>'+esc(v[k])+'</td>').join('')+'</tr>').join('')+'</tbody></table>'}
+
+let qaPermisosData=null;
+async function cargarPermisosQA(preservar){
+ if(loadedProfile?.rol!=='jefe')throw new Error('Solo el jefe puede administrar permisos.');
+ $('tableArea').textContent='Control de permisos por usuario, con validación en Supabase.';
+ $('qa_perm_estado').textContent='Consultando permisos del laboratorio…';
+ const res=await client.rpc('aq_permisos_administrar_listar_v1');
+ if(res.error)throw res.error;
+ qaPermisosData=res.data||{};
+ const selector=$('qa_perm_usuario');
+ const actual=preservar?selector.value:'';
+ const usuarios=qaPermisosData.usuarios||[];
+ selector.replaceChildren(...usuarios.map(u=>new Option(u.nombre+' ('+u.rol+')',String(u.id))));
+ if(actual&&usuarios.some(u=>String(u.id)===actual))selector.value=actual;
+ $('qa_perm_estado').textContent=usuarios.length?'Selecciona un empleado para personalizar sus permisos.':'No existen empleados para administrar.';
+ mostrarMatrizPermisosQA();
+}
+function mostrarMatrizPermisosQA(){
+ const cfg=qaPermisosData;
+ const cont=$('qa_permisos_tabla'),selector=$('qa_perm_usuario');
+ if(!cfg){cont.textContent='Sin datos.';return;}
+ const usuario=(cfg.usuarios||[]).find(u=>String(u.id)===selector.value);
+ if(!usuario){cont.textContent='Selecciona un empleado de pruebas.';$('qa_perm_rol').textContent='';return;}
+ $('qa_perm_rol').textContent='Rol predeterminado: '+usuario.rol+'. El jefe puede añadir o retirar excepciones individuales.';
+ const rolSet=new Set((cfg.roles||[]).filter(r=>r.rol===usuario.rol&&r.permitido).map(r=>r.codigo));
+ const overrides=new Map((cfg.excepciones||[]).filter(o=>String(o.usuario_id)===String(usuario.id)).map(o=>[o.codigo,o.permitido]));
+ let html='<table class="result-table"><thead><tr><th>Permiso</th><th>Por rol</th><th>Ajuste individual</th><th>Acceso final</th><th>Acción</th></tr></thead><tbody>';
+ for(const p of (cfg.catalogo||[])){
+   const porRol=rolSet.has(p.codigo),override=overrides.get(p.codigo);
+   const individual=overrides.has(p.codigo)?(override?'allow':'deny'):'default';
+   const efectivo=individual==='default'?porRol:override;
+   html+='<tr class="perm-row" data-perm-code="'+esc(p.codigo)+'"><td><strong>'+esc(p.nombre)+'</strong><div class="perm-base">'+esc(p.grupo)+'</div></td>'
+     +'<td>'+(porRol?'Sí':'No')+'</td>'
+     +'<td><select aria-label="Ajuste para '+esc(p.nombre)+'"><option value="default"'+(individual==='default'?' selected':'')+'>Predeterminado</option><option value="allow"'+(individual==='allow'?' selected':'')+'>Permitir</option><option value="deny"'+(individual==='deny'?' selected':'')+'>Bloquear</option></select></td>'
+     +'<td class="perm-effective">'+(efectivo?'Permitido':'Bloqueado')+'</td><td><button type="button" data-perm-save="'+esc(p.codigo)+'">Guardar</button></td></tr>';
+ }
+ cont.innerHTML=html+'</tbody></table>';
+ cont.querySelectorAll('[data-perm-save]').forEach(btn=>btn.addEventListener('click',async()=>{
+   const fila=btn.closest('tr');
+   const valor=fila.querySelector('select').value;
+   const permitido=valor==='default'?null:valor==='allow';
+   btn.disabled=true;$('qa_perm_estado').textContent='Guardando en el laboratorio…';
+   try{
+     const r=await client.rpc('aq_asignar_permiso_auth_v1',{
+       p_usuario_id:Number(usuario.id),p_codigo:btn.dataset.permSave,
+       p_permitido:permitido,p_motivo:'Ajuste realizado por el jefe en laboratorio QA'
+     });
+     if(r.error)throw r.error;
+     await cargarPermisosQA(true);
+     $('qa_perm_estado').textContent='Permiso actualizado. '+(r.data?.sin_cambios?'No hubo cambios efectivos.':'Cambio guardado y auditado.');
+   }catch(err){$('qa_perm_estado').textContent='No se guardó el permiso: '+err.message;btn.disabled=false;}
+ }));
+}
+
+async function openDashboard(profile,permissions){loadedProfile=profile;$('qa_perm_tab').hidden=profile?.rol!=='jefe';$('dashboard').hidden=false;$('rolText').textContent='Rol: '+(profile?.rol||'sin rol');$('stats').innerHTML=permissions.map(p=>'<div class="stat"><b>'+esc(p.error?'—':p.visibles??0)+'</b><span>'+esc(p.modulo)+'</span></div>').join('');await renderTab('productos')}
 function fmtQ(n){return 'Q'+Number(n).toFixed(2)}
 function creditBalance(c){return Math.max(0,Math.round((Number(c.monto)-Number(c.pagado||0))*100)/100)}
 function displayCreditBalance(){
@@ -581,6 +649,8 @@ $('solicitarVendedor').onclick=()=>run(async()=>{
  show('Solicitud para vendedor QA creada. En la sesión de jefe abre «Solicitudes vendedor QA» y apruébala.',{solicitud:r.data,identidad:{id:ident.id}});
 });
 
+$('qa_perm_usuario').addEventListener('change',mostrarMatrizPermisosQA);
+$('qa_perm_recargar').addEventListener('click',()=>cargarPermisosQA(true).catch(e=>$('qa_perm_estado').textContent=e.message));
 document.querySelectorAll('[data-tab]').forEach(button=>button.addEventListener('click',()=>{if(!loadedProfile)return;renderTab(button.dataset.tab).catch(e=>$('tableArea').textContent=e.message)}));
 $('registrar').onclick=()=>run(async()=>{const email=$('email').value.trim(),password=$('password').value;if(!email||password.length<8)throw new Error('Introduce correo y contraseña de 8 caracteres o más.');let r=await client.auth.signUp({email,password,options:{emailRedirectTo:'https://odeleonruiz.github.io/artealbarril/'}});$('password').value='';if(r.error)throw r.error;show('Solicitud registrada. Revisa tu correo por si debes confirmar la cuenta. Una cuenta nueva NO recibe permisos automáticamente.',{correo:email,uid:r.data.user?.id||null,sesion_activa:!!r.data.session})});
 $('entrar').onclick=()=>run(async()=>{const email=$('email').value.trim(),password=$('password').value;if(!email||!password)throw new Error('Escribe el correo y contraseña de pruebas.');let r=await client.auth.signInWithPassword({email,password});$('password').value='';if(r.error)throw r.error;show('Inicio de sesión realizado. Ahora pulsa Verificar acceso.',{uid:r.data.user?.id||null,correo:r.data.user?.email})});
