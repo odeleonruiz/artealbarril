@@ -28,7 +28,7 @@
 <pre id="result">La pantalla no muestra contraseñas ni tokens.</pre>
 <section class="dashboard" id="dashboard" hidden>
 <div class="dash-title"><h2 style="margin:0">Panel de pruebas de AQUABRI</h2><span class="role" id="rolText"></span></div>
-<p class="small">Consultas y operaciones de prueba con datos ficticios en Staging. Los formularios de venta, crédito y compras sí modifican la base de pruebas.</p>
+<p class="small">Consultas y operaciones de prueba con datos ficticios en Staging. Los formularios de venta, crédito, compras y pagos a proveedores sí modifican la base de pruebas.</p>
 <div class="stats" id="stats"></div>
 <div class="dashbar" id="dashbar">
 <button type="button" data-tab="productos" aria-pressed="true">Productos</button>
@@ -39,6 +39,7 @@
 <button type="button" data-tab="facturas" aria-pressed="false">Facturas</button>
 <button type="button" data-tab="venta_qa" aria-pressed="false">Registrar venta QA</button>
 <button type="button" data-tab="compra_qa" aria-pressed="false">Registrar compra QA</button>
+<button type="button" data-tab="proveedores_qa" aria-pressed="false">Pagar proveedor QA</button>
 <button type="button" data-tab="credito_qa" aria-pressed="false">Abonar crédito QA</button>
 </div>
 <div class="table-wrap" id="tableArea"></div>
@@ -77,6 +78,24 @@
 <p><strong>Total de factura: <span id="qa_compra_total">Q0.00</span></strong></p>
 <button id="qa_guardar_compra" type="submit">Guardar compra de prueba</button>
 <p id="qa_compra_result" role="status" aria-live="polite"></p>
+</form>
+
+
+<form id="pagoProveedorForm" class="qa-form" hidden>
+<h3>Pagar deuda ficticia de proveedor</h3>
+<p class="hint">Solo Staging, permitido al jefe. Abona una deuda de proveedor, registra una única salida de Caja si seleccionas «Desde Caja» y NO altera inventario ni crea un gasto adicional.</p>
+<label for="qa_deuda_proveedor">Deuda pendiente</label><select id="qa_deuda_proveedor" required></select>
+<p id="qa_deuda_saldo" class="balance" aria-live="polite">Saldo: —</p>
+<div class="qa-cols">
+<div><label for="qa_pago_proveedor_monto">Monto Q</label><input id="qa_pago_proveedor_monto" type="number" min="0.01" step="0.01" required></div>
+<div><label for="qa_pago_proveedor_fecha">Fecha</label><input id="qa_pago_proveedor_fecha" type="date" required></div>
+</div>
+<label for="qa_pago_proveedor_origen">Origen del pago</label>
+<select id="qa_pago_proveedor_origen"><option value="caja">Desde Caja (salida de dinero)</option><option value="externo">Pago externo (sin afectar Caja)</option></select>
+<label for="qa_pago_proveedor_notas">Observaciones</label><textarea id="qa_pago_proveedor_notas" maxlength="200" placeholder="Pago ficticio de proveedor"></textarea>
+<button id="qa_guardar_pago_proveedor" type="submit">Guardar pago a proveedor</button>
+<button id="qa_refrescar_deudas" type="button" class="secondary">Actualizar saldos</button>
+<p id="qa_pago_proveedor_result" role="status" aria-live="polite"></p>
 </form>
 
 <form id="creditoForm" class="qa-form" hidden>
@@ -124,7 +143,7 @@ async function prepareSale(){
  if(!pr.length||!clients.data.length)throw new Error('No hay clientes o productos ficticios disponibles');
 }
 function esc(v){return String(v??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-async function renderTab(tab){activeTab=tab;$('compraForm').hidden=tab!=='compra_qa';$('ventaForm').hidden=tab!=='venta_qa';$('creditoForm').hidden=tab!=='credito_qa';document.querySelectorAll('[data-tab]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tab===tab)));if(tab==='venta_qa'){await prepareSale();return;}if(tab==='credito_qa'){await prepareCredit();return;}if(tab==='compra_qa'){await preparePurchase();return;}const m=models[tab];$('tableArea').textContent='Consultando datos de prueba…';const res=await client.from(m.table).select(m.cols).limit(15).order('id',{ascending:false});if(res.error){$('tableArea').textContent='No tienes permiso para consultar este módulo o ocurrió un error: '+res.error.message;return}if(!(res.data||[]).length){$('tableArea').textContent='Sin registros visibles para este usuario.';return}let keys=m.cols.split(',');$('tableArea').innerHTML='<table class="result-table"><thead><tr>'+m.headings.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+res.data.map(v=>'<tr>'+keys.map(k=>'<td>'+esc(v[k])+'</td>').join('')+'</tr>').join('')+'</tbody></table>'}
+async function renderTab(tab){activeTab=tab;$('pagoProveedorForm').hidden=tab!=='proveedores_qa';$('compraForm').hidden=tab!=='compra_qa';$('ventaForm').hidden=tab!=='venta_qa';$('creditoForm').hidden=tab!=='credito_qa';document.querySelectorAll('[data-tab]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tab===tab)));if(tab==='venta_qa'){await prepareSale();return;}if(tab==='credito_qa'){await prepareCredit();return;}if(tab==='compra_qa'){await preparePurchase();return;}if(tab==='proveedores_qa'){await prepareSupplierPayment();return;}const m=models[tab];$('tableArea').textContent='Consultando datos de prueba…';const res=await client.from(m.table).select(m.cols).limit(15).order('id',{ascending:false});if(res.error){$('tableArea').textContent='No tienes permiso para consultar este módulo o ocurrió un error: '+res.error.message;return}if(!(res.data||[]).length){$('tableArea').textContent='Sin registros visibles para este usuario.';return}let keys=m.cols.split(',');$('tableArea').innerHTML='<table class="result-table"><thead><tr>'+m.headings.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+res.data.map(v=>'<tr>'+keys.map(k=>'<td>'+esc(v[k])+'</td>').join('')+'</tr>').join('')+'</tbody></table>'}
 async function openDashboard(profile,permissions){loadedProfile=profile;$('dashboard').hidden=false;$('rolText').textContent='Rol: '+(profile?.rol||'sin rol');$('stats').innerHTML=permissions.map(p=>'<div class="stat"><b>'+esc(p.error?'—':p.visibles??0)+'</b><span>'+esc(p.modulo)+'</span></div>').join('');await renderTab('productos')}
 function fmtQ(n){return 'Q'+Number(n).toFixed(2)}
 function creditBalance(c){return Math.max(0,Math.round((Number(c.monto)-Number(c.pagado||0))*100)/100)}
@@ -277,6 +296,68 @@ $('compraForm').addEventListener('submit',async e=>{
    $('qa_compra_result').className='error';
    $('qa_compra_result').textContent='No se pudo confirmar la compra: '+err.message+'. Si hubo un error de red, vuelve a enviar SIN cambiar los campos para reutilizar la clave de operación.';
  }finally{btn.disabled=qaCompraProductos.size===0;}
+});
+
+
+const qaSupplierDebts=new Map();let pendingSupplierPayment=null;
+function supplierDebtBalance(d){return Math.max(0,Math.round(Number(d.saldo)*100)/100)}
+function supplierDebtDisplay(){
+ const d=qaSupplierDebts.get($('qa_deuda_proveedor').value);
+ const saldo=d?supplierDebtBalance(d):0;
+ $('qa_deuda_saldo').textContent=d?'Saldo pendiente: '+fmtQ(saldo):'No hay deudas pendientes';
+ $('qa_pago_proveedor_monto').max=String(saldo);
+ if(d&&(!Number($('qa_pago_proveedor_monto').value)||Number($('qa_pago_proveedor_monto').value)>saldo))$('qa_pago_proveedor_monto').value=saldo.toFixed(2);
+}
+async function prepareSupplierPayment(preferredId){
+ $('pagoProveedorForm').hidden=false;
+ $('tableArea').textContent='Modo QA: pago de proveedores de prueba.';
+ if(loadedProfile?.rol!=='jefe')throw new Error('Solo el jefe puede pagar deudas a proveedores.');
+ const res=await client.rpc('aq_deudas_proveedores_auth_v1');
+ if(res.error)throw res.error;
+ qaSupplierDebts.clear();
+ const debts=(Array.isArray(res.data)?res.data:[]).filter(d=>supplierDebtBalance(d)>0);
+ debts.forEach(d=>qaSupplierDebts.set(String(d.id),d));
+ $('qa_deuda_proveedor').replaceChildren(...debts.map(d=>new Option('#'+d.id+' · '+d.proveedor+' · '+fmtQ(supplierDebtBalance(d)),String(d.id))));
+ if(preferredId&&qaSupplierDebts.has(String(preferredId)))$('qa_deuda_proveedor').value=String(preferredId);
+ if(!$('qa_pago_proveedor_fecha').value)$('qa_pago_proveedor_fecha').value=qaGuatemalaDate();
+ supplierDebtDisplay();
+ $('qa_guardar_pago_proveedor').disabled=!debts.length;
+ if(!debts.length)$('qa_pago_proveedor_result').textContent='No hay deudas pendientes en Staging. Primero registra una compra a crédito.';
+}
+$('qa_deuda_proveedor').addEventListener('change',()=>{pendingSupplierPayment=null;supplierDebtDisplay()});
+['qa_pago_proveedor_monto','qa_pago_proveedor_fecha','qa_pago_proveedor_origen','qa_pago_proveedor_notas'].forEach(id=>{
+ $(id).addEventListener('input',()=>{pendingSupplierPayment=null});
+ $(id).addEventListener('change',()=>{pendingSupplierPayment=null});
+});
+$('qa_refrescar_deudas').addEventListener('click',async()=>{
+ try{await prepareSupplierPayment($('qa_deuda_proveedor').value);$('qa_pago_proveedor_result').textContent='Deudas actualizadas desde Supabase Staging.'}
+ catch(err){$('qa_pago_proveedor_result').textContent='No se pudieron actualizar: '+err.message}
+});
+$('pagoProveedorForm').addEventListener('submit',async e=>{
+ e.preventDefault();
+ const btn=$('qa_guardar_pago_proveedor');if(btn.disabled)return;
+ const d=qaSupplierDebts.get($('qa_deuda_proveedor').value),amount=Number($('qa_pago_proveedor_monto').value),fecha=$('qa_pago_proveedor_fecha').value;
+ if(!d||!fecha||!Number.isFinite(amount)||amount<=0||amount>supplierDebtBalance(d)+0.00001||Math.abs(Math.round(amount*100)-amount*100)>0.00001){
+   $('qa_pago_proveedor_result').textContent='Monto mayor que saldo o fecha inválida. Actualiza las deudas.';return;
+ }
+ const payload={p_proveedor:d.proveedor,p_deuda_id:Number(d.id),p_monto:amount,p_fecha:fecha,p_notas:$('qa_pago_proveedor_notas').value.trim(),p_origen:$('qa_pago_proveedor_origen').value};
+ const signature=JSON.stringify(payload);
+ if(!pendingSupplierPayment||pendingSupplierPayment.signature!==signature)pendingSupplierPayment={signature,nonce:'QA-PAGO-PROVEEDOR-GITHUB-'+crypto.randomUUID()};
+ const nonce=pendingSupplierPayment.nonce;
+ btn.disabled=true;$('qa_pago_proveedor_result').className='';$('qa_pago_proveedor_result').textContent='Aplicando pago de proveedor en Staging…';
+ try{
+   const r=await client.rpc('aq_pagar_proveedor_auth_v1',{p_nonce:nonce,...payload});
+   if(r.error)throw r.error;
+   const response=r.data||{};
+   pendingSupplierPayment=null;
+   const message='✓ Pago '+fmtQ(amount)+' aplicado a deuda #'+d.id+' de '+d.proveedor+(response.repetida?' (reintento sin duplicado)':'')+'. '+(payload.p_origen==='caja'?'Registrada salida en Caja.':'Pago externo: Caja sin cambios.')+' Inventario sin cambios.';
+   $('qa_pago_proveedor_result').className='ok';$('qa_pago_proveedor_result').textContent=message;
+   try{await prepareSupplierPayment(d.id);$('qa_pago_proveedor_result').className='ok';$('qa_pago_proveedor_result').textContent=message}
+   catch(err){$('qa_pago_proveedor_result').textContent=message+' No se pudo refrescar: '+err.message}
+ }catch(err){
+   $('qa_pago_proveedor_result').className='error';
+   $('qa_pago_proveedor_result').textContent='No se pudo confirmar pago: '+err.message+'. Si hubo error de red, no cambies campos al reintentar. Comprueba Caja antes de efectuar otro pago.';
+ }finally{btn.disabled=qaSupplierDebts.size===0}
 });
 
 document.querySelectorAll('[data-tab]').forEach(button=>button.addEventListener('click',()=>{if(!loadedProfile)return;renderTab(button.dataset.tab).catch(e=>$('tableArea').textContent=e.message)}));
