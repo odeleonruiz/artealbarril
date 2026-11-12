@@ -11595,15 +11595,15 @@ async function delEnvase(id){
   if(!CU||!SOLO_JEFE.includes(CU.rol))return;
   const e=(D.envases||[]).find(x=>Number(x.id)===Number(id));
   if(e?.venta_id){showNotif('Este préstamo pertenece a la factura #'+e.venta_id+'. Cancela la factura desde Historial.','#c62828');return;}
-  if(!confirm('¿Eliminar este movimiento? Se revertirá también su efecto en el saldo del cliente y la bodega.'))return;
+  if(!confirm('¿Anular este movimiento conservando su historial y revirtiendo el saldo del cliente y la bodega?'))return;
   try{
-    const {data,error}=await sb.rpc('aq_eliminar_movimiento_envase',{
-      p_token:localStorage.getItem('aqb_token')||'',p_uid:Number(CU.id)||0,p_movimiento_id:Number(id)
+    const {data,error}=await sb.rpc('aq_anular_movimiento_envase_sesion_v1',{
+      p_movimiento_id:Number(id)
     });
     if(error)throw error;
     if(!data?.ok)throw new Error('Supabase no confirmó la eliminación');
     await loadAll();updateEnvStats();renderEnvases();renderEnvPrestados();
-    showNotif('✅ Movimiento eliminado; préstamo y bodega corregidos','#2e7d32');
+    showNotif('✅ Movimiento anulado; saldo del cliente y bodega corregidos, historial conservado','#2e7d32');
   }catch(err){
     console.error('AQUABRI: error eliminando movimiento de envases',err);
     showNotif('No se eliminó el movimiento: '+(err.message||'verifica el saldo del cliente'),'#c62828');
