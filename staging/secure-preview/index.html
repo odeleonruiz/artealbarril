@@ -10968,8 +10968,7 @@ async function aqCobroClienteSeguro({clienteId,monto,medio,notas='',creditoId=nu
   aqCobroCreditoGuardando=true;showLoad(true);
   let data=null,err=null;
   try{
-    const r=await sb.rpc('aq_cobrar_credito_seguro',{
-      p_token:localStorage.getItem('aqb_token')||'',p_uid:Number(CU?.id)||0,
+    const r=await sb.rpc('aq_cobrar_credito_sesion_segura_v1',{
       p_nonce:previo.nonce,p_cliente_id:cid,p_monto:payload.monto,
       p_medio:medio,p_notas:payload.notas,p_credito_id:crid
     });data=r.data;err=r.error;
