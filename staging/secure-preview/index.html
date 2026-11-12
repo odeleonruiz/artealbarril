@@ -5469,7 +5469,7 @@ async function cobrar(enviarWsp=false){
     return false;
   }
   const datosVenta={fecha:fechaVenta,cliente_id:cid?parseInt(cid):null,
-    desc_gral:aqCentavos(dg)/100,total,pagado:esCredito?0:pagado,
+    desc_gral:aqCentavos(dg)/100,total,pagado:(esCredito||estado==='Pendiente')?0:pagado,
     entrega:entTexto,notas:notasVenta,estado,
     bonificaciones:bonifs||null,usuario_id:CU?.id||null,
     nombre_mostrador:nombreLibre||null,
@@ -5480,11 +5480,12 @@ async function cobrar(enviarWsp=false){
   }
   let resultado=null,ventaError=null;
   try{
-    const respuesta=await sb.rpc('aq_registrar_venta_con_envases',{
-      p_token:localStorage.getItem('aqb_token')||'',
-      p_uid:Number(CU?.id)||0,
+    const respuesta=await sb.rpc('aq_vender_sesion_segura_v1',{
       p_nonce:window._aqCobroNonce,
-      p_venta:datosVenta,
+      p_venta:{...datosVenta,
+        aq_medio_pago:medioPago,
+        aq_credito:esCredito,
+        aq_fecha_vencimiento:document.getElementById('v-cred-fecha')?.value||null},
       p_items:detalleVenta
     });
     resultado=respuesta.data;ventaError=respuesta.error;
@@ -5496,7 +5497,7 @@ async function cobrar(enviarWsp=false){
     document.querySelectorAll('[onclick*="cobrar"]').forEach(b=>{b.disabled=false;b.style.opacity='';b.style.pointerEvents='';});
     const codigo=ventaError?.code?' · '+ventaError.code:'';
     const msg=ventaError?.message||'Supabase no confirmó la operación.';
-    const faltaFuncion=ventaError?.code==='PGRST202'||/aq_registrar_venta_con_envases|schema cache|function.*not found/i.test(msg);
+    const faltaFuncion=ventaError?.code==='PGRST202'||/aq_vender_sesion_segura_v1|schema cache|function.*not found/i.test(msg);
     alert(faltaFuncion
       ?'⚠️ Falta actualizar la función de venta y envases en Supabase. NO se registró esta venta. El carrito sigue intacto.'
       :'❌ No se confirmó la venta. '+msg+codigo+'\nEl carrito sigue disponible. Si hubo un error de conexión, revisa el Historial antes de reintentar para evitar duplicados.');
@@ -5515,6 +5516,8 @@ async function cobrar(enviarWsp=false){
 
   // El detalle ya fue confirmado; a partir de aquí registrar movimientos accesorios.
   const promesas=[];
+  if(!resultado.integral){
+
 
   // 2. Actualizar stock de cada producto
   for(const item of cart){
@@ -5563,6 +5566,7 @@ async function cobrar(enviarWsp=false){
     }));
   }
 
+  }
   // Movimientos complementarios: una venta confirmada no debe esconder
   // fallos de inventario/caja/crédito, pues requieren conciliación.
   let erroresMovimientos=[];
@@ -5585,9 +5589,9 @@ async function cobrar(enviarWsp=false){
   if(rp.data)D.prods=rp.data;
   if(rc.data)D.creditos=rc.data;
   // ── SISTEMA DE PUNTOS v2 — simple y directo ──
-  let _ptosGanadosTicket=0;
-  let _saldoNuevoTicket=null;
-  if(cid&&!esCredito){
+  let _ptosGanadosTicket=Number(resultado.puntos_ganados||0);
+  let _saldoNuevoTicket=resultado.saldo_puntos??null;
+  if(cid&&!esCredito&&!resultado.integral){
     try{
       // 1. Verificar que el programa esté activo
       const activo=D.puntosConfig?.activo;
@@ -5641,7 +5645,7 @@ async function cobrar(enviarWsp=false){
     }catch(e){console.error('Error puntos:',e);}
   }
   if(docActual){docActual._ptosGanados=_ptosGanadosTicket;docActual._saldoNuevo=_saldoNuevoTicket;}
-  mostrarTicket(venta,cart,dg,total,pagado,cid,entTexto,esCredito,bonifs);
+  mostrarTicket(venta,cart,dg,total,Number(venta.pagado??pagado),cid,entTexto,esCredito,bonifs);
   
   if(enviarWsp){
     const tel=document.getElementById('v-wsp-tel').value.trim();
