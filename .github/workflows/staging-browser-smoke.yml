@@ -1,0 +1,31 @@
+name: AQUABRI Staging - prueba de navegador móvil
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'staging/secure-preview/**'
+      - 'staging/tests/staging_login_browser.cjs'
+      - '.github/workflows/staging-browser-smoke.yml'
+  workflow_dispatch:
+jobs:
+  smoke-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Instalar Playwright
+        run: npm install --no-save playwright@1.56.1
+      - name: Instalar Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Validar vista previa en modo móvil
+        run: node staging/tests/staging_login_browser.cjs
+      - name: Conservar captura únicamente para depuración
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aquabri-staging-login-smoke
+          path: staging-login-smoke.png
+          if-no-files-found: ignore
