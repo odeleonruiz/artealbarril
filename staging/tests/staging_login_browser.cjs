@@ -9,7 +9,7 @@ const assert=require('node:assert/strict');
     assert(r&&r.status()===200,'No cargó la vista previa: '+r?.status());
     const title=await page.title();
     console.log('Diagnóstico UI:',JSON.stringify({url:page.url(),status:r.status(),title,qaBanner:await page.locator('#aq-qa-banner').count(),loginForm:await page.locator('#login-screen').count()}));
-    assert(title.includes('QA'),'La pantalla no indica entorno de pruebas');
+    assert((await page.locator('#aq-qa-banner').innerText()).includes('ENTORNO DE PRUEBAS'),'La pantalla no muestra el aviso del laboratorio');
     assert((await page.locator('#aq-qa-banner').count())===1,'Falta advertencia de laboratorio');
     await page.waitForFunction(()=>{
       const el=document.querySelector('#login-screen');
