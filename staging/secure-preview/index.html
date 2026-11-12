@@ -6885,7 +6885,7 @@ async function agregarPuntoMapa(clienteId){
   navigator.geolocation.getCurrentPosition(async pos=>{
     const lat=pos.coords.latitude;
     const lng=pos.coords.longitude;
-    await sb.from('clientes').update({lat,lng}).eq('id',clienteId);
+    await sb.rpc('aq_guardar_cliente_sesion_v1',{p_cliente:{lat,lng},p_cliente_id:Number(clienteId)});
     const c=D.clientes.find(c=>c.id===clienteId);
     if(c){c.lat=lat;c.lng=lng;}
     renderHistorial();
@@ -7277,7 +7277,7 @@ async function asignarRutasPorCercaniaMasiva(){
   for(const c of sinRuta){
     const cercano=clienteMasCercanoConRuta(c.lat,c.lng,c.id);
     if(cercano){
-      const res=await sb.from('clientes').update({ruta:cercano.ruta}).eq('id',c.id);
+      const res=await sb.rpc('aq_guardar_cliente_sesion_v1',{p_cliente:{ruta:cercano.ruta},p_cliente_id:Number(c.id)});
       if(!res.error){c.ruta=cercano.ruta;asignados++;}
     } else {
       sinCercano++;
@@ -7432,7 +7432,7 @@ function initMapa(){
           const cid=gmEditandoUbicacion;
           const lat=e.latLng.lat().toFixed(6);
           const lng=e.latLng.lng().toFixed(6);
-          await sb.from('clientes').update({lat:parseFloat(lat),lng:parseFloat(lng)}).eq('id',cid);
+          await sb.rpc('aq_guardar_cliente_sesion_v1',{p_cliente:{lat:parseFloat(lat),lng:parseFloat(lng)},p_cliente_id:Number(cid)});
           const cliUpd=D.clientes.find(c=>c.id===cid);
           if(cliUpd){cliUpd.lat=parseFloat(lat);cliUpd.lng=parseFloat(lng);addGmMarker(cliUpd);}
           actualizarContadorSinUbic();
@@ -7883,7 +7883,7 @@ async function guardarRutaDesdeIW(cid){
       .find(r=>normalizarRuta(r)===normalizarRuta(nuevaRuta));
     if(rutaExistente)nuevaRuta=rutaExistente; // usar la versión ya existente
   }
-  await sb.from('clientes').update({ruta:nuevaRuta||null}).eq('id',cid);
+  await sb.rpc('aq_guardar_cliente_sesion_v1',{p_cliente:{ruta:nuevaRuta||null},p_cliente_id:Number(cid)});
   c.ruta=nuevaRuta||null;
   if(gmMarkers[cid]?._iw)gmMarkers[cid]._iw.close();
   addGmMarker(c);
@@ -8026,7 +8026,7 @@ async function guardarNuevoCliMapa(){
 
 async function guardarPosCliente(){
   const cid=parseInt(document.getElementById('mk-cli').value);if(!cid)return;
-  await sb.from('clientes').update({lat:parseFloat(mkLat),lng:parseFloat(mkLng)}).eq('id',cid);
+  await sb.rpc('aq_guardar_cliente_sesion_v1',{p_cliente:{lat:parseFloat(mkLat),lng:parseFloat(mkLng)},p_cliente_id:Number(cid)});
   closeModal('modal-marcar-cli');cancelarModoMarcar();
   await loadAll();const c=D.clientes.find(x=>x.id===cid);
   if(c&&gmMap)addGmMarker(c);showNotif('✅ Posición guardada');
@@ -9078,7 +9078,7 @@ async function ejecutarFusion(){
   // Actualizar en Supabase
   const cliOrigen=D.clientes.filter(c=>c.ruta===origen);
   for(const c of cliOrigen){
-    await sb.from('clientes').update({ruta:destino}).eq('id',c.id);
+    await sb.rpc('aq_guardar_cliente_sesion_v1',{p_cliente:{ruta:destino},p_cliente_id:Number(c.id)});
     c.ruta=destino;
   }
   closeModal('modal-fusionar');
@@ -9120,7 +9120,7 @@ async function unificarRutasDuplicadas(){
     // Actualizar todos los clientes de ese grupo que tengan versión diferente
     const aActualizar=arr.filter(x=>x.ruta!==nombreOficial);
     for(const c of aActualizar){
-      await sb.from('clientes').update({ruta:nombreOficial}).eq('id',c.id);
+      await sb.rpc('aq_guardar_cliente_sesion_v1',{p_cliente:{ruta:nombreOficial},p_cliente_id:Number(c.id)});
       const local=D.clientes.find(x=>x.id===c.id);
       if(local)local.ruta=nombreOficial;
       total++;
@@ -15924,7 +15924,7 @@ function usarUbicacionEnEdicion(){
     const lng=pos.coords.longitude.toFixed(6);
     const c=D.clientes.find(x=>x.id===gmEditandoUbicacion);
     if(confirm('¿Usar tu ubicación actual para '+( c?.nombre||'este cliente')+'?\nLat: '+lat+'\nLng: '+lng)){
-      sb.from('clientes').update({lat:parseFloat(lat),lng:parseFloat(lng)}).eq('id',gmEditandoUbicacion).then(async()=>{
+      sb.rpc('aq_guardar_cliente_sesion_v1',{p_cliente:{lat:parseFloat(lat),lng:parseFloat(lng)},p_cliente_id:Number(gmEditandoUbicacion)}).then(async()=>{
         await loadLight();
         D.clientes.filter(c=>c.lat&&c.lng).forEach(c=>addGmMarker(c));
         showNotif('✅ Ubicación actualizada','#2e7d32');
