@@ -1,0 +1,21 @@
+name: Staging - comprobar aislamiento y accesos anónimos
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'staging/secure-preview/**'
+      - 'staging/tests/secure_preview_http.mjs'
+      - '.github/workflows/staging-secure-preview.yml'
+  workflow_dispatch:
+
+jobs:
+  smoke-staging:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verificar que no se utiliza la base de producción
+        run: node staging/tests/secure_preview_http.mjs
