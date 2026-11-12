@@ -4833,7 +4833,7 @@ async function renderClientesEliminados(){
   const el=document.getElementById('ini-eliminados');
   if(!card||!el)return;
   if(!CU||!SOLO_JEFE.includes(CU.rol)){card.style.display='none';return;}
-  const{data:eliminados}=await sb.from('clientes_eliminados').select('*').order('fecha_eliminacion',{ascending:false}).limit(20);
+  const{data:eliminados}=await sb.from('clientes_eliminados').select('*').is('restaurado_en',null).order('fecha_eliminacion',{ascending:false}).limit(20);
   if(!eliminados||!eliminados.length){card.style.display='none';return;}
   card.style.display='';
   el.innerHTML=eliminados.map(c=>{
@@ -4854,44 +4854,19 @@ async function renderClientesEliminados(){
   }).join("");
 }
 async function restaurarCliente(elimId){
-  if(!confirm('¿Restaurar este cliente?'))return;
+  if(!CU||CU.rol!=='jefe'){showNotif('Solo el jefe puede restaurar clientes','#c62828');return;}
+  if(!confirm('¿Restaurar este cliente sin cambiar su ID ni sus ventas?'))return;
   showLoad(true);
-  const{data:eli}=await sb.from('clientes_eliminados').select('*').eq('id',elimId).single();
-  if(!eli){showLoad(false);showNotif('No se encontró el cliente','#c62828');return;}
-  // Restaurar con datos completos si están disponibles
-  let datosCliente;
-  if(eli.datos_completos){
-    try{
-      const d=typeof eli.datos_completos==='string'?JSON.parse(eli.datos_completos):eli.datos_completos;
-      // Quitar el id para que Supabase asigne uno nuevo
-      const{id:_,created_at:__,...resto}=d;
-      datosCliente=resto;
-    }catch(e){datosCliente=null;}
-  }
-  if(!datosCliente){
-    // Fallback con datos básicos
-    datosCliente={
-      nombre:eli.nombre,ruta:eli.ruta,telefono:eli.telefono,
-      direccion:eli.direccion,lat:eli.lat||null,lng:eli.lng||null,
-      tiene_exhibidor:eli.tiene_exhibidor||false,
-      frecuencia:eli.frecuencia||null,estado:'Activo'
-    };
-  }
-  const{data:nuevo,error}=await sb.from('clientes').insert(datosCliente).select().single();
-  if(error){showLoad(false);showNotif('Error al restaurar: '+error.message,'#c62828');return;}
-  // Eliminar del historial
-  await sb.from('clientes_eliminados').delete().eq('id',elimId);
-  await loadLight();
-  renderClientes();renderClientesEliminados();
-  showLoad(false);
-  showNotif(`✅ Cliente "${eli.nombre}" restaurado con ${eli.lat?'ubicación':'datos básicos'}`,'#2e7d32');
+  try{
+    const {data,error}=await sb.rpc('aq_restaurar_cliente_sesion_v1',{p_historial_id:Number(elimId)});
+    if(error||!data?.ok)throw error||new Error('Restauración no confirmada');
+    await loadLight();renderClientes();renderClientesEliminados();
+    showNotif('✅ Cliente restaurado con el mismo ID; historial conservado','#2e7d32');
+  }catch(e){console.error(e);showNotif('No se pudo restaurar: '+(e.message||''),'#c62828');}
+  finally{showLoad(false);}
 }
-
 async function limpiarHistorialEliminados(){
-  if(!confirm('¿Limpiar todo el historial de clientes eliminados?'))return;
-  await sb.from('clientes_eliminados').delete().neq('id',0);
-  renderClientesEliminados();
-  showNotif('Historial limpiado');
+  showNotif('El historial de clientes archivados se conserva por seguridad contable. No se eliminará.','#e65100');
 }
 function renderClientesInactivos(){
   const el=document.getElementById('ini-inactivos');if(!el)return;
@@ -7331,8 +7306,8 @@ async function saveCli(){
   const obj={nombre:nom,telefono:document.getElementById('ct').value,direccion:document.getElementById('cd').value,ruta:rutaFinal,lat:latVal,lng:lngVal,tiene_exhibidor:document.getElementById('cexhib').value==='1',descripcion_exhibidor:document.getElementById('cexhib-desc').value,exhibidor_capacidad:parseInt(document.getElementById('cexhib-cap')?.value)||0,exhibidor_costo:parseFloat(document.getElementById('cexhib-costo')?.value)||0,fecha_nacimiento:nacRaw||null,vendedor_id:vendRaw};
   const id=document.getElementById('cid').value;
   if(id){
-    const {error}=await sb.from('clientes').update(obj).eq('id',id);
-    if(error){showNotif('Error al guardar cliente: '+error.message,'#c62828');return;}
+    const {data,error}=await sb.rpc('aq_guardar_cliente_sesion_v1',{p_cliente:obj,p_cliente_id:Number(id)});
+    if(error||!data?.ok){showNotif('Error al guardar cliente: '+(error?.message||'Sin confirmación'),'#c62828');return;}
   } else {
     try{const r=await aqCrearClienteConCaptacion(obj);if(r.mensaje)showNotif(r.mensaje,'#e65100');}
     catch(e){showNotif('Error al registrar cliente: '+(e.message||e),'#c62828');return;}
@@ -7358,29 +7333,23 @@ function editCli(id){const c=D.clientes.find(x=>x.id===id);if(!c)return;document
   if(c.tiene_exhibidor){btnEx.style.background='#00695c';btnEx.innerHTML='✅ EXHIBIDOR ACTIVO — Toca para desactivar';boxEx.style.display='';}
   else{btnEx.style.background='#546e7a';btnEx.innerHTML='🖥 Tiene Exhibidor';boxEx.style.display='none';}
   document.getElementById('cexhib-desc').value=c.descripcion_exhibidor||'';if(document.getElementById('cexhib-cap'))document.getElementById('cexhib-cap').value=c.exhibidor_capacidad||0;if(document.getElementById('cexhib-costo'))document.getElementById('cexhib-costo').value=c.exhibidor_costo||0;document.getElementById('cli-ft').textContent='Editar Cliente';fillRutaDatalist(c.lat,c.lng);}
-async function delCli(id){if(!confirm('¿Eliminar cliente? Se eliminarán también sus registros asociados.'))return;
+async function delCli(id){
+  if(!CU||CU.rol!=='jefe'){showNotif('Solo el jefe puede archivar clientes','#c62828');return;}
+  if(!confirm('¿Archivar este cliente SIN borrar créditos, ventas ni movimientos?'))return;
   showLoad(true);
-  const cli=D.clientes.find(c=>c.id===id);
-  if(cli)await sb.from('clientes_eliminados').insert({nombre:cli.nombre||'',ruta:cli.ruta||'',telefono:cli.telefono||'',direccion:cli.direccion||'',lat:cli.lat||null,lng:cli.lng||null,tiene_exhibidor:cli.tiene_exhibidor||false,frecuencia:cli.frecuencia||null,datos_completos:JSON.stringify(cli),fecha_eliminacion:hoy(),eliminado_por:CU?.nombre||'Jefe'});
-  await sb.from('creditos').delete().eq('cliente_id',id);
-  await sb.from('puntos_historial').delete().eq('cliente_id',id);
-  await sb.from('puntos_clientes').delete().eq('cliente_id',id);
-  await sb.from('puntos_canjes_qr').delete().eq('cliente_id',id);
-  await sb.from('visitas').delete().eq('cliente_id',id);
-  await sb.from('envases').delete().eq('cliente_id',id);
-  await sb.from('activos_prestamos').delete().eq('cliente_id',id);
-  await sb.from('ruta_paradas').delete().eq('cliente_id',id);
-  await sb.from('ventas').update({cliente_id:null}).eq('cliente_id',id);
-  await sb.from('clientes').delete().eq('id',id);
-  showLoad(false);
-  await loadLight();renderClientes();renderClientesInactivos();renderClientesEliminados();
-  // Refrescar lista de sugerencias y ruta inteligente
-  renderSugerenciasVisita();
-  if(_rutaInteligente.length>0){
-    _rutaInteligente=_rutaInteligente.filter(r=>r.c.id!==id);
-    mostrarLotePorVisitar(0);
-  }
-  showNotif('Cliente eliminado','#c62828');}
+  try{
+    const {data,error}=await sb.rpc('aq_archivar_cliente_sesion_v1',{p_cliente_id:Number(id)});
+    if(error||!data?.ok)throw error||new Error('Archivado no confirmado');
+    await loadLight();renderClientes();renderClientesInactivos();renderClientesEliminados();
+    renderSugerenciasVisita();
+    if(_rutaInteligente.length>0){
+      _rutaInteligente=_rutaInteligente.filter(r=>r.c.id!==id);
+      mostrarLotePorVisitar(0);
+    }
+    showNotif('✅ Cliente archivado. Sus ventas, créditos y movimientos se conservaron.','#2e7d32');
+  }catch(e){console.error(e);showNotif('No se archivó: '+(e?.message||'Revisa créditos o envases pendientes'),'#c62828');}
+  finally{showLoad(false);}
+}
 function fillRutaDatalist(latCliente=null, lngCliente=null){
   // Deduplicar por nombre normalizado — "Manuel de Jesus" y "manuel de jesús" son la misma
   const rutasMap={};
@@ -12500,9 +12469,7 @@ async function saveGasto(){
   const btn=el('g-guardar');if(btn){btn.disabled=true;btn.textContent='⏳ Guardando…';}
   let confirmado=null;
   try{
-    const resp=await sb.rpc('aq_registrar_gasto_seguro',{
-      p_token:localStorage.getItem('aqb_token')||'',
-      p_uid:Number(CU?.id)||0,
+    const resp=await sb.rpc('aq_registrar_gasto_sesion_v1',{
       p_nonce:window._aqGastoPendiente.nonce,
       p_gasto:datos
     });
@@ -12591,11 +12558,7 @@ function syncFiltroGastos(val,tipo){
 async function delGasto(id){
   if(!confirm('¿Eliminar este gasto? Si tiene una salida de Caja vinculada y todavía no se cerró, se eliminarán ambos registros juntos.'))return;
   try{
-    const resp=await sb.rpc('aq_eliminar_gasto_seguro',{
-      p_token:localStorage.getItem('aqb_token')||'',
-      p_uid:Number(CU?.id)||0,
-      p_gasto_id:Number(id)
-    });
+    const resp=await sb.rpc('aq_eliminar_gasto_sesion_v1',{p_gasto_id:Number(id)});
     if(resp.error)throw resp.error;
     if(!resp.data?.eliminado)throw new Error('Supabase no confirmó la eliminación.');
     await aqRecargarGastos();
@@ -16936,6 +16899,28 @@ function modalAbrirCaja(){
   openModal('modal-abrir-caja');
 }
 
+
+// Los reintentos de apertura/cierre de Caja usan el mismo nonce de servidor.
+// Nunca descartar un resultado de red desconocido sin revisar primero el historial.
+function aqCajaNoncePendiente(tipo,parametros){
+  const key='aqb_caja_'+tipo+'_pendiente_v1';
+  const firma=JSON.stringify(parametros);
+  let intento;
+  try{intento=JSON.parse(localStorage.getItem(key)||'null');}catch(_){intento=null;}
+  if(intento&&intento.firma!==firma){
+    if(!confirm('Existe una operación de Caja anterior sin resultado confirmado. '
+       +'Revisa el historial y confirma que es una operación DIFERENTE. '
+       +'¿Ya lo verificaste?'))return null;
+    localStorage.removeItem(key);intento=null;
+  }
+  if(!intento){
+    if(!globalThis.crypto?.randomUUID)throw new Error('Se necesita HTTPS para usar Caja');
+    intento={firma,nonce:crypto.randomUUID()};
+    localStorage.setItem(key,JSON.stringify(intento));
+  }
+  return intento.nonce;
+}
+function aqCajaNonceConfirmado(tipo){localStorage.removeItem('aqb_caja_'+tipo+'_pendiente_v1');}
 let aqCajaAperturaGuardando=false;
 async function abrirCaja(){
   if(aqCajaAperturaGuardando)return;
@@ -16968,9 +16953,14 @@ async function abrirCaja(){
     }
     // Registro informativo, NO sustituye auditoría del actor en Supabase.
     notaFinal=(notaFinal?notaFinal+' · ':'')+'Apertura solicitada por: '+(CU?.nombre||'Usuario #'+(CU?.id||'?'));
-    const {error:escrituraError}=await sb.from('caja')
-      .insert({fecha:hoy(),tipo:'apertura',monto,notas:notaFinal,usuario_id:usuarioId});
-    if(escrituraError)throw escrituraError;
+    const params={p_fecha:hoy(),p_monto:monto,p_usuario_caja:usuarioId,p_notas:notaFinal};
+    const nonce=aqCajaNoncePendiente('apertura',params);
+    if(!nonce)return;
+    const {data,error:escrituraError}=await sb.rpc('aq_abrir_caja_sesion_v1',{
+      ...params,p_nonce:nonce
+    });
+    if(escrituraError||!data?.movimiento_id)throw escrituraError||new Error('Sin confirmación de apertura');
+    aqCajaNonceConfirmado('apertura');
     closeModal('modal-abrir-caja');
     showNotif('✅ Apertura guardada: Q '+monto.toFixed(2),'#2e7d32');
     await initCaja();
@@ -17131,8 +17121,19 @@ async function cerrarCaja(){
       (info.sinClasificarCantidad?' | Medios de pago sin clasificar: '+info.sinClasificarCantidad:'')+
       ' | Transferencias (fuera de efectivo): '+info.transferencias.toFixed(2)+' | Otros medios (fuera de efectivo): '+info.otrosNoEfectivo.toFixed(2);
     const notas=(notasUsuario?notasUsuario+' · ':'')+resumen;
-    const {error}=await sb.from('caja').insert({fecha,tipo:'cierre',monto,notas,usuario_id:CU?.id||null});
-    if(error)throw error;
+    const parametros={
+      p_fecha:fecha,p_apertura_id:info.aperturaId,p_contado:monto,
+      p_esperado_cliente:info.esperado,p_num_movimientos:info.numeroMovimientos,
+      p_acepta_sin_clasificar:info.sinClasificarCantidad>0,
+      p_acepta_diferencia:Math.abs(diff)>=0.01,p_notas:notas
+    };
+    const nonce=aqCajaNoncePendiente('cierre',parametros);
+    if(!nonce)return;
+    const {data,error}=await sb.rpc('aq_cerrar_caja_sesion_v1',{
+      ...parametros,p_nonce:nonce
+    });
+    if(error||!data?.movimiento_id)throw error||new Error('Cierre sin confirmar');
+    aqCajaNonceConfirmado('cierre');
     aqCajaCierrePreparado=null;
     window._aqFechaCierreForzado=null;window._aqCierreSaldoHistorico=null;
     closeModal('modal-cerrar-caja');
@@ -21004,19 +21005,12 @@ async function aqActualizarCierreReportes(){
 /* Solo las altas nuevas realizadas por un vendedor asociado a un equipo generan incentivos automáticos.
    La RPC verifica la sesión y la pertenencia al equipo antes de insertar el cliente y el incentivo. */
 async function aqCrearClienteConCaptacion(datos){
-  const esVendedor=['vendedor','vendedor_editor'].includes(CU?.rol);
-  if(!esVendedor){
-    const {data,error}=await sb.from('clientes').insert({...datos,creado_por:CU?.nombre||'Jefe'}).select().single();
-    if(error)throw error;
-    return {cliente:data,incentivos:0};
-  }
-  const {data,error}=await sb.rpc('aq_crear_cliente_autocaptacion',{
-    p_token:localStorage.getItem('aqb_token')||'',p_uid:Number(CU?.id)||0,p_cliente:datos
-  });
-  if(error)throw new Error('La captación automática requiere instalar 03_activar_incentivos_automaticos.sql. '+error.message);
+  const {data,error}=await sb.rpc('aq_crear_cliente_captacion_sesion_v1',{p_cliente:datos});
+  if(error)throw error;
   const id=Number(data?.cliente_id||0);
-  if(!id)throw new Error('La base de datos no devolvió el cliente creado');
-  return {cliente:{...datos,id,creado_por:CU?.nombre||''},incentivos:Number(data?.incentivos_creados||0),mensaje:data?.mensaje||null};
+  if(!id)throw new Error('El servidor no confirmó el ID del cliente');
+  return {cliente:{...datos,id,creado_por:String(CU?.id||'')},
+    incentivos:Number(data?.incentivos_creados||0),mensaje:data?.mensaje||null};
 }
 </script>
 <script id="aq-incentivos-migracion-2026">
