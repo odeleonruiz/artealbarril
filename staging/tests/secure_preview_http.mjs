@@ -37,4 +37,25 @@ const response=JSON.parse(body);
 assert.equal(response.ok,false,'Inicio de sesión aceptó credenciales inexistentes');
 assert(!Object.hasOwn(response,'token'),'Inicio de sesión devolvió token sin verificar identidad');
 console.log('RECHAZO DE LOGIN INCORRECTO, SIN FILTRACIÓN');
+
+// También comprobar que el RPC transaccional no permita registrar dinero
+// ni ventas con la clave pública y sin una sesión válida.
+async function mustRejectOperation(functionName, payload) {
+  const r=await fetch(base+'/rpc/'+functionName,{
+    method:'POST',headers:{...headers,'content-type':'application/json'},
+    body:JSON.stringify(payload)
+  });
+  assert(r.status===401||r.status===403,
+   functionName+' no rechazó la operación sin sesión: '+r.status);
+  console.log('OPERACIÓN PROTEGIDA SIN SESIÓN',functionName);
+}
+await mustRejectOperation('aq_vender_sesion_segura_v1',{
+  p_nonce:'qa_invalida_0123456789abcdef',
+  p_venta:{},p_items:[]
+});
+await mustRejectOperation('aq_cobrar_credito_sesion_segura_v1',{
+  p_nonce:'qa_invalida_0123456789abcdef',
+  p_cliente_id:1,p_monto:1,p_medio:'efectivo',p_notas:'QA',p_credito_id:null
+});
+
 console.log('VALIDACIÓN PRELIMINAR STAGING OK; no reemplaza pruebas con sesión real');
